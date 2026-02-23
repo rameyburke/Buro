@@ -21,7 +21,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable'
 import { KanbanColumn } from './KanbanColumn'
 import { IssueCard } from '../issues/IssueCard'
-import { useAppStore } from '../../stores/appStore'
+import useAppStore from '../../stores/appStore'
 import type { Issue } from '../../types/api'
 
 const COLUMN_TITLES = {

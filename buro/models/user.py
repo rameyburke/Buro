@@ -109,12 +109,14 @@ class User(Base):
     assigned_issues: Mapped[list["Issue"]] = relationship(
         "Issue",
         back_populates="assignee",
+        foreign_keys="[Issue.assignee_id]",
         cascade="all, delete-orphan"
     )
 
     reported_issues: Mapped[list["Issue"]] = relationship(
         "Issue",
-        back_populates="reporter"
+        back_populates="reporter",
+        foreign_keys="[Issue.reporter_id]"
     )
 
     @staticmethod

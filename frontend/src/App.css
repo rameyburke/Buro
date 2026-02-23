@@ -1,0 +1,109 @@
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.App-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 2.5rem;
+}
+
+.App-header nav button {
+  background: #61dafb;
+  border: none;
+  padding: 10px 20px;
+  margin: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s;
+}
+
+.App-header nav button:hover {
+  background: #21a3c4;
+}
+
+.hero-section {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+.hero-section h2 {
+  color: #333;
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+.hero-section p {
+  color: #666;
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+}
+
+.status-cards {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin: 30px 0;
+  flex-wrap: wrap;
+}
+
+.status-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  min-width: 200px;
+  text-align: left;
+}
+
+.status-card strong {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+}
+
+.instructions {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  text-align: left;
+}
+
+.instructions h3 {
+  color: #333;
+  margin-top: 0;
+}
+
+.instructions ul {
+  margin: 20px 0 0 0;
+  padding-left: 20px;
+}
+
+.instructions li {
+  margin-bottom: 10px;
+  color: #555;
+}
+
+@media (max-width: 768px) {
+  .status-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .status-card {
+    min-width: 300px;
+  }
+
+  .App-header h1 {
+    font-size: 2rem;
+  }
+}

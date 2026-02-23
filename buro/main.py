@@ -10,6 +10,10 @@
 # - CORS setup: Essential for web app communication during development.
 #   In production: Restrict origins for security.
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,9 +21,9 @@ import uvicorn
 
 # Why separate routers: Domain-driven organization
 # Benefits: Independent testing, cleaner code, scalable when app grows
-from .api import auth, issues, projects, users
-from .core.database import engine
-from buro.models import Base
+from api import auth, issues, projects, users
+from core.database import engine
+from models import Base
 
 # Why lifespan context manager: Modern FastAPI approach for startup/shutdown
 # Replaces on_event("startup"/"shutdown") - cleaner async handling

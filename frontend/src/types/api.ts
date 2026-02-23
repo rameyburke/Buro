@@ -27,14 +27,19 @@ export interface Project {
   updated_at: string;
 }
 
+export type IssueStatus = 'backlog' | 'to_do' | 'in_progress' | 'done';
+export type IssuePriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
+export type IssueType = 'epic' | 'story' | 'task' | 'bug';
+export type UserRole = 'admin' | 'manager' | 'developer';
+
 export interface Issue {
   id: string;
   key: string;  // PROJ-123 format
   title: string;
   description?: string;
-  issue_type: 'epic' | 'story' | 'task' | 'bug';
-  status: 'backlog' | 'to_do' | 'in_progress' | 'done';
-  priority: 'highest' | 'high' | 'medium' | 'low' | 'lowest';
+  issue_type: IssueType;
+  status: IssueStatus;
+  priority: IssuePriority;
   project_id: string;
   reporter_id: string;
   assignee_id?: string;
