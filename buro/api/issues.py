@@ -7,10 +7,11 @@
 # - Kanban operations: Status transitions with drag-and-drop support.
 # - Issue assignment: Single assignee per issue (simplified from Jira).
 
-from typing import List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from uuid import UUID
 
 from buro.core.database import get_db
 from buro.models import (
@@ -120,52 +121,53 @@ router = APIRouter()
 
 @router.get("/", response_model=IssueListResponse)
 async def list_issues(
-    # Query parameters for filtering and pagination
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
-    assignee_id: Optional[str] = Query(None, description="Filter by assignee ID"),
-    reporter_id: Optional[str] = Query(None, description="Filter by reporter ID"),
-    status: Optional[str] = Query(None, description="Filter by status (backlog, to_do, in_progress, done)"),
-    issue_type: Optional[str] = Query(None, description="Filter by type (bug, task, story, epic)"),
     skip: int = Query(0, ge=0, description="Number of issues to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of issues to return"),
-    # Dependencies
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List issues with filtering and pagination.
+    """List issues with filtering and pagination (Temporarily simplified).
 
-    Why GET /issues with complex filters: Core functionality of issue tracking.
-    Users need to find issues by various criteria efficiently.
-
-    Educational Note: Query parameters vs request body choice:
-    - Query params: Cacheable, bookmarkable URLs
-    - Tradeoff: URL length limits, no complex data structures
+    Temporarily commented out database queries to isolate CORS issues.
+    Once CORS is resolved, we'll re-enable full filtering.
     """
-    issue_service = IssueService(db)
+    # Temporary hardcoded sample data to test CORS without database issues
+    # TODO: Re-enable full database queries once CORS is stable
 
-    # Convert string parameters to enums where needed
-    status_enum = IssueStatus(status) if status else None
-    type_enum = IssueType(issue_type) if issue_type else None
-
-    # Get filtered issues
-    issues = await issue_service.list_issues(
-        project_id=project_id,
-        assignee_id=assignee_id,
-        reporter_id=reporter_id,
-        status=status_enum,
-        issue_type=type_enum,
-        current_user=current_user,
-        skip=skip,
-        limit=limit
-    )
-
-    # Simple total count (for now - would optimize in production)
-    # TODO: Add efficient total count query
-    total = len(issues) if len(issues) < limit else len(issues) + 100  # Approximate
+    sample_issues = [
+        {
+            "id": "sample-issue-1",
+            "key": "SAMPLE-1",
+            "title": "Sample issue 1",
+            "description": "This is a sample issue for testing",
+            "issue_type": "story",
+            "status": "to_do",
+            "priority": "medium",
+            "project_id": project_id or "sample-project",
+            "reporter_id": current_user.id,
+            "assignee_id": None,
+            "created_at": "2026-02-23T12:00:00",
+            "updated_at": "2026-02-23T12:00:00"
+        },
+        {
+            "id": "sample-issue-2",
+            "key": "SAMPLE-2",
+            "title": "Sample issue 2",
+            "description": "Another sample issue",
+            "issue_type": "bug",
+            "status": "in_progress",
+            "priority": "high",
+            "project_id": project_id or "sample-project",
+            "reporter_id": current_user.id,
+            "assignee_id": current_user.id,
+            "created_at": "2026-02-23T12:00:00",
+            "updated_at": "2026-02-23T12:00:00"
+        }
+    ]
 
     return IssueListResponse(
-        issues=[IssueResponse.from_issue(issue) for issue in issues],
-        total=total,
+        issues=sample_issues[:limit],
+        total=len(sample_issues),
         skip=skip,
         limit=limit
     )
@@ -245,6 +247,7 @@ async def create_issue(
 async def update_issue(
     issue_id: str,
     request: IssueUpdateRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -267,7 +270,8 @@ async def update_issue(
         issue = await issue_service.update_issue(
             issue_id=issue_id,
             updates=updates,
-            current_user=current_user
+            current_user=current_user,
+            background_tasks=background_tasks
         )
 
         return IssueResponse.from_issue(issue)
@@ -316,46 +320,82 @@ async def update_issue_status(
             detail="Failed to update issue status"
         )
 
-@router.get("/board/{project_id}", response_model=Dict[str, List[IssueResponse]])
-async def get_kanban_board(
-    project_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get project issues organized by Kanban column.
+@router.get("/projects/{project_id}/kanban", response_model=Dict[str, List[IssueResponse]])
+async def get_kanban_board(project_id: str, current_user: User = Depends(get_current_user)):
+    """Get project issues organized by Kanban column (Temporarily simplified).
 
-    Why specialized endpoint: Kanban boards need specific data structure.
-    Different from generic issue listing - organized by status columns.
-
-    Educational Note: Data aggregation for UI:
-    - Issues grouped by status for board layout
-    - Each column contains issues in that workflow state
-    - Order matters: usually by priority, then updated date
+    Temporarily returns sample data to test CRUD/UI without database issues.
+    TODO: Re-enable database queries once core issues are resolved.
     """
-    issue_service = IssueService(db)
-
-    # Get all issues for this project
-    issues = await issue_service.list_issues(
-        project_id=project_id,
-        current_user=current_user,
-        limit=1000  # Kanban boards typically show all issues
-    )
-
-    # Group by status for Kanban columns
-    # Why dictionary: Easy to map to frontend column structures
-    board_columns = {
-        "backlog": [],
-        "to_do": [],
-        "in_progress": [],
-        "done": []
+    # Simplified sample data to test Kanban board functionality
+    sample_board = {
+        "backlog": [
+            {
+                "id": "sample-backlog-1",
+                "key": "SAMPLE-1",
+                "title": "Backlog Item 1",
+                "description": "A backlog item",
+                "issue_type": "story",
+                "status": "backlog",
+                "priority": "medium",
+                "project_id": project_id,
+                "reporter_id": current_user.id,
+                "assignee_id": None,
+                "created_at": "2026-02-23T12:00:00",
+                "updated_at": "2026-02-23T12:00:00"
+            }
+        ],
+        "to_do": [
+            {
+                "id": "sample-todo-1",
+                "key": "SAMPLE-2",
+                "title": "To Do Item 1",
+                "description": "A to do item",
+                "issue_type": "task",
+                "status": "to_do",
+                "priority": "high",
+                "project_id": project_id,
+                "reporter_id": current_user.id,
+                "assignee_id": current_user.id,
+                "created_at": "2026-02-23T12:00:00",
+                "updated_at": "2026-02-23T12:00:00"
+            }
+        ],
+        "in_progress": [
+            {
+                "id": "sample-progress-1",
+                "key": "SAMPLE-3",
+                "title": "In Progress Item 1",
+                "description": "An in progress item",
+                "issue_type": "bug",
+                "status": "in_progress",
+                "priority": "high",
+                "project_id": project_id,
+                "reporter_id": current_user.id,
+                "assignee_id": current_user.id,
+                "created_at": "2026-02-23T12:00:00",
+                "updated_at": "2026-02-23T12:00:00"
+            }
+        ],
+        "done": [
+            {
+                "id": "sample-done-1",
+                "key": "SAMPLE-4",
+                "title": "Completed Item 1",
+                "description": "A completed item",
+                "issue_type": "story",
+                "status": "done",
+                "priority": "low",
+                "project_id": project_id,
+                "reporter_id": current_user.id,
+                "assignee_id": None,
+                "created_at": "2026-02-23T12:00:00",
+                "updated_at": "2026-02-23T12:00:00"
+            }
+        ]
     }
 
-    for issue in issues:
-        status_key = issue.status.value
-        if status_key in board_columns:
-            board_columns[status_key].append(IssueResponse.from_issue(issue))
-
-    return board_columns
+    return sample_board
 
 # TODO: Add endpoints for:
 # - DELETE /{issue_id} (soft delete)

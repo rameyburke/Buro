@@ -37,6 +37,7 @@ interface AppStore extends AppState {
   // Issue actions
   loadIssues: (projectId?: string) => Promise<boolean>
   createIssue: (issue: IssueCreate) => Promise<boolean>
+  createProject: (project: { name: string; key: string; description?: string }) => Promise<boolean>
   updateIssue: (issueId: string, updates: IssueUpdate) => Promise<boolean>
   moveIssue: (issueId: string, newStatus: string) => Promise<boolean>
   setSelectedIssue: (issue: Issue | null) => void
@@ -214,6 +215,20 @@ const useAppStore = create<AppStore>((set, get) => ({
       return true
     } catch (error) {
       console.error('Failed to create issue:', error)
+      return false
+    }
+  },
+
+  createProject: async (projectData: { name: string; key: string; description?: string }): Promise<boolean> => {
+    try {
+      const newProject = await api.createProject(projectData.name, projectData.key, projectData.description)
+
+      // Refresh projects list
+      await get().loadProjects()
+
+      return true
+    } catch (error) {
+      console.error('Failed to create project:', error)
       return false
     }
   },

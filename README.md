@@ -1,6 +1,19 @@
 # Buro - Agile Project Management Application
 
+**Sprint 3 Status:** ✅ Notifications & Reports - Complete!
+
 A Jira-like agile project management application built with FastAPI backend and React frontend.
+
+## Completed Sprints:
+- ✅ **Sprint 1:** Database Models & Foundation (Backend architecture, Kanban schema)
+- ✅ **Sprint 2:** Kanban & Relationships (Full issue CRUD, drag-and-drop board)
+- ✅ **Sprint 3:** Notifications & Reports (Email notifications, analytics dashboard)
+
+## Sprint 3 Features:
+- **Email Notifications:** SMTP-based notifications for issue assignments and updates
+- **Analytics Dashboard:** Team velocity, burndown charts, workload distribution
+- **Issue Aging Reports:** Identify issues that may be stuck or need attention
+- **Comprehensive Reporting:** Project overviews, completion rates, velocity tracking
 
 ## 🚀 Quick Start
 

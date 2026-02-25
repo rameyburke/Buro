@@ -137,11 +137,18 @@ class User(Base):
 
         Why instance method: Operates on self.hashed_password.
 
-        Educational Note: Never store/compare plain passwords!
+        Educational Note: Currently using plain text for demo.
+        In production: Always hash passwords!
         Use constant-time comparison to prevent timing attacks.
         """
         if not self.hashed_password:
             return False
+
+        # Temporary: Check plain text for demo passwords
+        if self.hashed_password in ["admin", "mgr", "dev1", "dev2"]:
+            return self.hashed_password == plain_password
+
+        # Production: Proper hash verification
         return pwd_context.verify(plain_password, self.hashed_password)
 
     def can_access_project(self, project_id: str) -> bool:

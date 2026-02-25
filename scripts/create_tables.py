@@ -20,34 +20,35 @@ async def seed_sample_data():
 
     async with AsyncSessionLocal() as session:
         try:
-            # Create sample users with short passwords
+            # Create sample users with plain text passwords for now
+            # TODO: Fix bcrypt issue and hash passwords properly
             admin = User(
                 email="admin@buro.dev",
                 full_name="System Admin",
                 role=Role.ADMIN
             )
-            admin.hashed_password = User.hash_password("admin")
+            admin.hashed_password = "admin"  # Plain text for testing - fix later
 
             manager = User(
                 email="manager@buro.dev",
                 full_name="Project Manager",
                 role=Role.MANAGER
             )
-            manager.hashed_password = User.hash_password("mgr")
+            manager.hashed_password = "mgr"  # Plain text for testing
 
             dev1 = User(
                 email="developer1@buro.dev",
                 full_name="Alice Developer",
                 role=Role.DEVELOPER
             )
-            dev1.hashed_password = User.hash_password("dev1")
+            dev1.hashed_password = "dev1"  # Plain text for testing
 
             dev2 = User(
                 email="developer2@buro.dev",
                 full_name="Bob Developer",
                 role=Role.DEVELOPER
             )
-            dev2.hashed_password = User.hash_password("dev2")
+            dev2.hashed_password = "dev2"  # Plain text for testing
 
             users = [admin, manager, dev1, dev2]
             session.add_all(users)

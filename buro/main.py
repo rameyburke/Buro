@@ -21,7 +21,7 @@ import uvicorn
 
 # Why separate routers: Domain-driven organization
 # Benefits: Independent testing, cleaner code, scalable when app grows
-from api import auth, issues, projects, users
+from api import auth, issues, projects, users, analytics
 from core.database import engine
 from models import Base
 
@@ -77,10 +77,31 @@ app = FastAPI(
 # Security note: In production, specify allowed origins explicitly
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # React dev server
+    allow_origins=[
+        "*",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:3002",
+        "http://127.0.0.1:3002",
+        "http://localhost:4000",
+        "http://127.0.0.1:4000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:6000",
+        "http://127.0.0.1:6000"
+    ],  # Wildcard + specific React dev server on multiple ports
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    allow_headers=[
+        "*",
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With"
+    ],
 )
 
 # Include API routers with prefixes and tags
@@ -108,6 +129,12 @@ app.include_router(
     issues.router,
     prefix="/api/issues",
     tags=["issues"]
+)
+
+app.include_router(
+    analytics.router,
+    prefix="/api/analytics",
+    tags=["analytics"]
 )
 
 # Root endpoint for health checks and API discovery

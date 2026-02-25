@@ -10,7 +10,7 @@
 from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, BackgroundTasks
 
 from buro.models import (
     Issue, User, Project, IssueType, IssueStatus, Priority,
@@ -211,7 +211,8 @@ class IssueService:
         self,
         issue_id: str,
         updates: dict,
-        current_user: User
+        current_user: User,
+        background_tasks: Optional[BackgroundTasks] = None
     ) -> Issue:
         """Update issue with business rules and validation.
 
@@ -247,6 +248,7 @@ class IssueService:
                 setattr(issue, field, value.strip())
             elif field == 'assignee_id':
                 # Assignment changes - can assign to valid users
+                assignee = None
                 if value is not None:
                     assignee = await self.db.get(User, value)
                     if not assignee or not assignee.is_active:
@@ -254,7 +256,15 @@ class IssueService:
                             status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Invalid assignee"
                         )
+                # Store old assignee for notification
+                old_assignee = issue.assignee
                 setattr(issue, field, value)
+
+                # Send notification for assignment changes
+                if background_tasks and assignee:
+                    await self._notify_assignee_change(
+                        assignee, issue, background_tasks
+                    )
             elif field == 'priority':
                 # Priority changes - validate enum value
                 if value not in [p.value for p in Priority]:
@@ -358,3 +368,14 @@ class IssueService:
         # For now, if they can access the project, they can access issues in it
         # This will need optimization and refinement
         return True
+
+    async def _notify_assignee_change(
+        self, assignee: User, issue: Issue, background_tasks: BackgroundTasks
+    ):
+        """Send notification when issue is assigned to a user."""
+        from buro.services.notification_service import EmailNotificationService
+
+        notification_service = EmailNotificationService()
+        await notification_service.send_issue_assigned_notification(
+            background_tasks, issue, assignee
+        )

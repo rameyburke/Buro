@@ -43,6 +43,15 @@ export function KanbanBoard() {
   const [dragOverlay, setDragOverlay] = React.useState<Issue | null>(null)
   const [dragColumnId, setDragColumnId] = React.useState<string | null>(null)
 
+  // Load board data when component mounts or project changes
+  // Why useEffect: Load data after component mounts
+  // Alternative: Load in store initialization (could cause premature API calls)
+  React.useEffect(() => {
+    if (currentProject) {
+      refreshKanbanBoard()
+    }
+  }, [currentProject, refreshKanbanBoard])
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
     const data = active.data.current as { type: string; issue: Issue }
@@ -133,19 +142,28 @@ export function KanbanBoard() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-full">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '24px',
+          overflowX: 'auto',
+          paddingBottom: '16px',
+          width: 'max-content',
+          minWidth: '100%'
+        }}>
           {Object.entries(kanbanBoard).map(([status, issues]) => {
             const columnTitle = COLUMN_TITLES[status as keyof typeof COLUMN_TITLES] || status
             const columnStatus = status as keyof typeof COLUMN_TITLES
 
             return (
-              <KanbanColumn
-                key={status}
-                title={columnTitle}
-                status={columnStatus}
-                issues={issues}
-                isLoading={false}
-              />
+              <div key={status} style={{ flexShrink: 0, width: '320px' }}>
+                <KanbanColumn
+                  title={columnTitle}
+                  status={columnStatus}
+                  issues={issues}
+                  isLoading={false}
+                />
+              </div>
             )
           })}
         </div>
