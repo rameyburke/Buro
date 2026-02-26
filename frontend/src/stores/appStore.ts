@@ -266,18 +266,19 @@ const useAppStore = create<AppStore>((set, get) => ({
   },
 
   refreshKanbanBoard: async (): Promise<boolean> => {
-    const currentProject = get().currentProject
-    if (!currentProject) {
+    if (!get().currentProject) {
       return false
     }
 
     try {
-      const kanbanBoard = await api.getKanbanBoard(currentProject.id)
-      const issues = await api.getIssues({ project_id: currentProject.id })
+      const kanbanBoard = await api.getKanbanBoard(get().currentProject!.id)
+
+      // Get all issues by flattening the kanban board structure
+      const allIssues = Object.values(kanbanBoard).flat()
 
       set({
         kanbanBoard,
-        issues,
+        issues: allIssues,
         isLoading: false
       })
 

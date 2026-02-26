@@ -44,45 +44,51 @@ export function KanbanColumn({ title, status, issues, isLoading }: KanbanColumnP
   })
 
   return (
-    <div className={`
-      flex flex-col h-full min-h-[600px] bg-white border border-gray-200 rounded-lg
-      ${isOver ? 'border-blue-400 shadow-lg' : ''}
-      ${STATUS_COLORS[status as IssueStatus]}
+    <div ref={setNodeRef} className={`
+      flex flex-col h-full min-h-[600px] bg-gray-50 border-2 border-gray-300 rounded-lg relative
+      ${isOver ? 'border-blue-500 bg-blue-50 shadow-lg' : 'hover:border-gray-400 hover:bg-gray-100'}
+      transition-all duration-300
     `}>
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="font-semibold text-gray-900">{title}</h2>
+      <div className="flex items-center justify-between p-3 border-b-2 border-gray-400 bg-gray-100 rounded-t-lg">
+        <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
         <div className={`
-          px-2 py-1 text-xs font-medium rounded-full
+          px-2 py-1 text-xs font-medium rounded-full bg-white
           ${STATUS_COUNT_COLORS[status as IssueStatus]}
         `}>
           {issues.length}
         </div>
       </div>
 
-      <div
-        ref={setNodeRef}
-        className="flex-1 p-4 space-y-0 min-h-[300px]"
-      >
+      <div className="flex-1 p-2 min-h-[300px]">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-gray-500">Loading issues...</div>
+            <div className="text-gray-500 text-xs">Loading issues...</div>
           </div>
         ) : issues.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-gray-400 text-sm">No issues</div>
+          <div className={`
+            flex items-center justify-center h-full rounded-lg border-2 border-dashed
+            ${isOver ? 'border-blue-400 bg-blue-50 text-blue-600' : 'border-gray-300 bg-gray-25 text-gray-400'}
+            transition-colors duration-200
+          `}>
+            <div className="text-center">
+              <div className="text-2xl mb-1">⬇️</div>
+              <div className="text-xs font-medium">Drop issues here</div>
+            </div>
           </div>
         ) : (
-          <SortableContext
-            items={issues.map(issue => issue.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {issues.map((issue) => (
-              <IssueCard
-                key={issue.id}
-                issue={issue}
-              />
-            ))}
-          </SortableContext>
+          <div className={`space-y-2 ${isOver ? 'ring-2 ring-blue-400 ring-opacity-50 rounded-lg' : ''}`}>
+            <SortableContext
+              items={issues.map(issue => issue.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {issues.map((issue) => (
+                <IssueCard
+                  key={issue.id}
+                  issue={issue}
+                />
+              ))}
+            </SortableContext>
+          </div>
         )}
       </div>
     </div>

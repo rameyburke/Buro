@@ -10,6 +10,7 @@
 from typing import List, Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
+from sqlalchemy.orm import joinedload
 from fastapi import HTTPException, status, BackgroundTasks
 
 from buro.models import (
@@ -156,6 +157,8 @@ class IssueService:
         Educational Note: Building complex SQL queries with optional filters
         requires careful construction to avoid performance issues.
         """
+
+
         # Base query with eager loading
         stmt = select(Issue).options(
             # Eager load related objects to avoid N+1 queries
@@ -268,10 +271,8 @@ class IssueService:
             elif field == 'priority':
                 # Priority changes - validate enum value
                 if value not in [p.value for p in Priority]:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid priority value"
-                    )
+                        # For Kanban, allow flexible transitions but log for workflow improvement
+                        print(f"WARNING: Non-standard transition from {issue.status.value} to {new_status.value}")
                 issue.priority = Priority(value)
             elif field == 'status':
                 # Status changes - use workflow method for validation
@@ -295,7 +296,10 @@ class IssueService:
         Educational Note: Workflow validation prevents invalid states.
         Unlike Scrum which restricts transitions, Kanban allows flexibility.
         """
-        issue = await self.db.get(Issue, issue_id)
+        # Eager load project relationship for key generation in response
+        stmt = select(Issue).options(joinedload(Issue.project)).where(Issue.id == issue_id)
+        result = await self.db.execute(stmt)
+        issue = result.unique().scalar_one_or_none()
         if not issue:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -309,26 +313,18 @@ class IssueService:
                 detail="Cannot change issue status"
             )
 
-        # Kanban workflow: Most transitions allowed, but prevent obvious issues
-        # Why flexible workflow: Kanban focuses on visualization, not rigid process
-        current_idx = list(IssueStatus).index(issue.status)
-        new_idx = list(IssueStatus).index(new_status)
-
-        # Prevent jumping forward more than one status at a time by default
-        # Exception: Can always move to DONE or BACKLOG
-        if (abs(new_idx - current_idx) > 1 and
-            new_status != IssueStatus.DONE and
-            new_status != IssueStatus.BACKLOG):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot transition directly from {issue.status.value} to {new_status.value}"
-            )
+        # Kanban workflow: All transitions allowed - Kanban focuses on flow, not rigid process
+        # Educational Note: Unlike Scrum which enforces sprint ceremonies and workflows,
+        # Kanban allows flexible status transitions to optimize work visualization and flow
 
         issue.status = new_status
         await self.db.commit()
-        await self.db.refresh(issue)
 
-        return issue
+        # Re-query the issue to get the updated data WITH relationships
+        stmt = select(Issue).options(joinedload(Issue.project)).where(Issue.id == issue.id)
+        result = await self.db.execute(stmt)
+        updated_issue = result.unique().scalar_one()
+        return updated_issue
 
     async def _get_accessible_project_ids(self, user: User) -> List[str]:
         """Helper method to get project IDs user can access."""

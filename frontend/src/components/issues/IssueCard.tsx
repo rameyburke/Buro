@@ -59,10 +59,10 @@ export function IssueCard({ issue, isDragging = false }: IssueCardProps) {
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className={`
-        bg-white border border-gray-200 rounded-lg p-3 mb-2 shadow-sm hover:shadow-md transition-shadow
-        ${isActualDragging ? 'opacity-50 shadow-lg' : ''}
-        cursor-pointer
+       className={`
+        bg-white border-2 border-gray-300 rounded-lg p-2 mb-3 shadow-md hover:shadow-lg hover:border-blue-300 transition-all text-xs min-h-[60px] w-full
+        ${isActualDragging ? 'opacity-50 shadow-xl rotate-1 scale-105' : ''}
+        cursor-grab hover:cursor-grabbing
       `}
       {...listeners}
       onClick={(e) => {
@@ -74,19 +74,19 @@ export function IssueCard({ issue, isDragging = false }: IssueCardProps) {
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span>{ISSUE_TYPE_ICONS[issue.issue_type]}</span>
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-sm">{ISSUE_TYPE_ICONS[issue.issue_type]}</span>
             <span className="text-xs text-gray-500">{issue.key}</span>
           </div>
 
-          <h3 className="font-medium text-sm text-gray-900 mb-2 leading-tight">
+          <h3 className="font-medium text-xs text-gray-900 mb-1 leading-tight">
             {issue.title}
           </h3>
 
           {issue.description && (
-            <p className="text-xs text-gray-600 mb-2 line-clamp-2">
-              {issue.description.length > 80
-                ? `${issue.description.substring(0, 80)}...`
+            <p className="text-xs text-gray-600 mb-1 line-clamp-1">
+              {issue.description.length > 50
+                ? `${issue.description.substring(0, 50)}...`
                 : issue.description
               }
             </p>

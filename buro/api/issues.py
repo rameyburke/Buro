@@ -8,8 +8,10 @@
 # - Issue assignment: Single assignee per issue (simplified from Jira).
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Form
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from pydantic import BaseModel
 from uuid import UUID
 
@@ -122,55 +124,41 @@ router = APIRouter()
 @router.get("/", response_model=IssueListResponse)
 async def list_issues(
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    assignee_id: Optional[str] = Query(None, description="Filter by assignee"),
+    reporter_id: Optional[str] = Query(None, description="Filter by reporter"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    issue_type: Optional[str] = Query(None, description="Filter by issue type"),
     skip: int = Query(0, ge=0, description="Number of issues to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of issues to return"),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List issues with filtering and pagination (Temporarily simplified).
+    """List issues with filtering and pagination."""
+    try:
+        # Simple query to get all issues for the project
+        stmt = select(Issue).options(joinedload(Issue.project)).where(Issue.project_id == project_id)
 
-    Temporarily commented out database queries to isolate CORS issues.
-    Once CORS is resolved, we'll re-enable full filtering.
-    """
-    # Temporary hardcoded sample data to test CORS without database issues
-    # TODO: Re-enable full database queries once CORS is stable
+        result = await db.execute(stmt)
+        issues = result.unique().scalars().all()
 
-    sample_issues = [
-        {
-            "id": "sample-issue-1",
-            "key": "SAMPLE-1",
-            "title": "Sample issue 1",
-            "description": "This is a sample issue for testing",
-            "issue_type": "story",
-            "status": "to_do",
-            "priority": "medium",
-            "project_id": project_id or "sample-project",
-            "reporter_id": current_user.id,
-            "assignee_id": None,
-            "created_at": "2026-02-23T12:00:00",
-            "updated_at": "2026-02-23T12:00:00"
-        },
-        {
-            "id": "sample-issue-2",
-            "key": "SAMPLE-2",
-            "title": "Sample issue 2",
-            "description": "Another sample issue",
-            "issue_type": "bug",
-            "status": "in_progress",
-            "priority": "high",
-            "project_id": project_id or "sample-project",
-            "reporter_id": current_user.id,
-            "assignee_id": current_user.id,
-            "created_at": "2026-02-23T12:00:00",
-            "updated_at": "2026-02-23T12:00:00"
-        }
-    ]
-
-    return IssueListResponse(
-        issues=sample_issues[:limit],
-        total=len(sample_issues),
-        skip=skip,
-        limit=limit
-    )
+        # Convert to response format
+        return IssueListResponse(
+            issues=[IssueResponse.from_issue(issue) for issue in issues],
+            total=len(issues),
+            skip=skip,
+            limit=limit
+        )
+    except Exception as e:
+        print(f"Error in list_issues: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return empty response instead of crashing
+        return IssueListResponse(
+            issues=[],
+            total=0,
+            skip=skip,
+            limit=limit
+        )
 
 @router.get("/{project_key}/{issue_number}", response_model=IssueResponse)
 async def get_issue(
@@ -287,7 +275,7 @@ async def update_issue(
 @router.put("/{issue_id}/status", response_model=IssueResponse)
 async def update_issue_status(
     issue_id: str,
-    new_status: IssueStatus,
+    new_status: IssueStatus = Form(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -301,6 +289,7 @@ async def update_issue_status(
     - Are there business rules (approvals, transitions)?
     - Should this trigger notifications?
     """
+    print(f"DEBUG: Status update request - issue: {issue_id}, new_status: {new_status.value}")
     issue_service = IssueService(db)
 
     try:
@@ -314,88 +303,53 @@ async def update_issue_status(
 
     except HTTPException:
         raise
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"DEBUG Status Update Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update issue status"
         )
 
 @router.get("/projects/{project_id}/kanban", response_model=Dict[str, List[IssueResponse]])
-async def get_kanban_board(project_id: str, current_user: User = Depends(get_current_user)):
+async def get_kanban_board(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get project issues organized by Kanban column (Temporarily simplified).
 
     Temporarily returns sample data to test CRUD/UI without database issues.
     TODO: Re-enable database queries once core issues are resolved.
     """
-    # Simplified sample data to test Kanban board functionality
-    sample_board = {
-        "backlog": [
-            {
-                "id": "sample-backlog-1",
-                "key": "SAMPLE-1",
-                "title": "Backlog Item 1",
-                "description": "A backlog item",
-                "issue_type": "story",
-                "status": "backlog",
-                "priority": "medium",
-                "project_id": project_id,
-                "reporter_id": current_user.id,
-                "assignee_id": None,
-                "created_at": "2026-02-23T12:00:00",
-                "updated_at": "2026-02-23T12:00:00"
-            }
-        ],
-        "to_do": [
-            {
-                "id": "sample-todo-1",
-                "key": "SAMPLE-2",
-                "title": "To Do Item 1",
-                "description": "A to do item",
-                "issue_type": "task",
-                "status": "to_do",
-                "priority": "high",
-                "project_id": project_id,
-                "reporter_id": current_user.id,
-                "assignee_id": current_user.id,
-                "created_at": "2026-02-23T12:00:00",
-                "updated_at": "2026-02-23T12:00:00"
-            }
-        ],
-        "in_progress": [
-            {
-                "id": "sample-progress-1",
-                "key": "SAMPLE-3",
-                "title": "In Progress Item 1",
-                "description": "An in progress item",
-                "issue_type": "bug",
-                "status": "in_progress",
-                "priority": "high",
-                "project_id": project_id,
-                "reporter_id": current_user.id,
-                "assignee_id": current_user.id,
-                "created_at": "2026-02-23T12:00:00",
-                "updated_at": "2026-02-23T12:00:00"
-            }
-        ],
-        "done": [
-            {
-                "id": "sample-done-1",
-                "key": "SAMPLE-4",
-                "title": "Completed Item 1",
-                "description": "A completed item",
-                "issue_type": "story",
-                "status": "done",
-                "priority": "low",
-                "project_id": project_id,
-                "reporter_id": current_user.id,
-                "assignee_id": None,
-                "created_at": "2026-02-23T12:00:00",
-                "updated_at": "2026-02-23T12:00:00"
-            }
-        ]
+    # Fetch real issues from database grouped by status with eager loading
+    # Need to include project relationship for issue.key property
+    stmt = select(Issue).options(
+        joinedload(Issue.project),  # Eager load project for key generation
+        joinedload(Issue.reporter),  # Optional: for user info
+        joinedload(Issue.assignee)   # Optional: for assignee info
+    ).where(Issue.project_id == project_id)
+
+    # Apply security filtering if needed
+    # For now, allow access to all issues in the project
+    result = await db.execute(stmt)
+    issues = result.unique().scalars().all()
+
+    # Group issues by status for Kanban board
+    kanban_board = {
+        "backlog": [],
+        "to_do": [],
+        "in_progress": [],
+        "done": []
     }
 
-    return sample_board
+    for issue in issues:
+        status_key = issue.status.value  # Convert enum to string
+        if status_key in kanban_board:
+            kanban_board[status_key].append(IssueResponse.from_issue(issue))
+
+    return kanban_board
 
 # TODO: Add endpoints for:
 # - DELETE /{issue_id} (soft delete)

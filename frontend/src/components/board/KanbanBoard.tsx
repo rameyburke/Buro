@@ -89,6 +89,9 @@ export function KanbanBoard() {
 
     if (activeData?.type !== 'issue') return
 
+    // Only allow drops on column containers, not on individual issues
+    if (overData?.type !== 'column') return
+
     const draggedIssue = activeData.issue
     const targetColumn = overData?.status
 
@@ -97,20 +100,21 @@ export function KanbanBoard() {
     const currentStatus = draggedIssue.status
     if (currentStatus === targetColumn) return // No change
 
-    // Validate move (could add business rule validation here)
     console.log(`Moving ${draggedIssue.key} from ${currentStatus} to ${targetColumn}`)
 
-    // Perform the move via API
-    const success = await moveIssue(draggedIssue.id, targetColumn)
+      console.log(`✅ Executing move: ${draggedIssue.key} from ${currentStatus} → ${targetColumn}`)
 
-    if (success) {
-      // Refresh board to show updated state
-      await refreshKanbanBoard()
-      console.log('Issue moved successfully')
-    } else {
-      console.error('Failed to move issue')
-      // Could show toast notification here
-    }
+      // Perform the move via API
+      const success = await moveIssue(draggedIssue.id, targetColumn)
+
+      if (success) {
+        // Refresh board to reflect the move
+        await refreshKanbanBoard()
+        console.log('✅ Issue moved successfully')
+      } else {
+        console.error('❌ Failed to move issue')
+        // Could show toast notification here
+      }
   }
 
   if (!currentProject) {
@@ -136,34 +140,40 @@ export function KanbanBoard() {
         <p className="text-gray-600">Track and manage your team's work</p>
       </div>
 
-      <DndContext
-        collisionDetection={pointerWithin} // Accurate pointer-based collision detection
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <div style={{
+      <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+        <DndContext
+          collisionDetection={closestCenter} // Center-based collision - prioritizes larger targets
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+        <div         style={{
           display: 'flex',
           flexDirection: 'row',
-          gap: '24px',
+          gap: '12px',
           overflowX: 'auto',
           paddingBottom: '16px',
           width: 'max-content',
           minWidth: '100%'
         }}>
-          {Object.entries(kanbanBoard).map(([status, issues]) => {
+          {Object.entries(kanbanBoard).map(([status, issues], index) => {
             const columnTitle = COLUMN_TITLES[status as keyof typeof COLUMN_TITLES] || status
             const columnStatus = status as keyof typeof COLUMN_TITLES
 
             return (
-              <div key={status} style={{ flexShrink: 0, width: '320px' }}>
-                <KanbanColumn
-                  title={columnTitle}
-                  status={columnStatus}
-                  issues={issues}
-                  isLoading={false}
-                />
-              </div>
+              <React.Fragment key={status}>
+                <div style={{ flexShrink: 0, width: '280px' }}>
+                  <KanbanColumn
+                    title={columnTitle}
+                    status={columnStatus}
+                    issues={issues}
+                    isLoading={false}
+                  />
+                </div>
+                {index < Object.keys(kanbanBoard).length - 1 && (
+                  <div className="flex-shrink-0 w-1 bg-gray-300 rounded-full"></div>
+                )}
+              </React.Fragment>
             )
           })}
         </div>
@@ -177,7 +187,8 @@ export function KanbanBoard() {
             />
           ) : null}
         </DragOverlay>
-      </DndContext>
+        </DndContext>
+      </div>
     </div>
   )
 }

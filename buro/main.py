@@ -68,8 +68,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Buro - Agile Project Management",
     description="Jira-like agile project management application built with FastAPI and React",
-    version="0.1.0",
-    lifespan=lifespan
+    version="0.1.0"
+    # lifespan=lifespan  # Temporarily disabled for debugging
 )
 
 # CORS configuration for development
@@ -83,6 +83,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
+        "http://localhost:3001",
         "http://localhost:3002",
         "http://127.0.0.1:3002",
         "http://localhost:4000",
