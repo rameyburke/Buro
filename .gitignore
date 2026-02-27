@@ -208,3 +208,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.venv_backup_1772174624/lib64
+.venv_backup_1772174624/bin/python
+.venv_backup_1772174624/bin/python3
+.venv_backup_1772174624/bin/python3.12

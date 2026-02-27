@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, NavLink } from 'react-router-dom';
 import useAppStore from './stores/appStore';
 import './App.css';
 
@@ -9,19 +9,6 @@ import { AnalyticsPage } from './pages/Analytics';
 import { ProjectsPage } from './pages/Projects';
 import { IssuesPage } from './pages/Issues';
 import { LoginPage } from './pages/Login';
-
-// Simple auth wrapper
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAppStore();
-  const location = useLocation();
-
-  if (!isAuthenticated) {
-    // Could redirect to login page here
-    return <Navigate to="/" state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
-}
 
 // Main App Component
 function App() {
@@ -47,70 +34,58 @@ function App() {
     }
   }, [isAuthenticated, loadProjects, projects.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const navLinks = [
+    { to: '/board', label: 'Kanban Board' },
+    { to: '/projects', label: 'Projects' },
+    { to: '/issues', label: 'Issues' },
+    { to: '/analytics', label: 'Analytics' }
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="app-root">
       {/* Navigation Header */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Link to="/" className="text-xl font-bold text-gray-900">
-                🚀 Buro
-              </Link>
+      <header className="buro-header">
+        <div className="header-inner">
+          <div className="brand">
+            <Link to="/">Buro</Link>
+          </div>
 
-              {isAuthenticated && (
-                <div className="ml-10 flex items-baseline space-x-4">
-                  <Link
-                    to="/board"
-                    className="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Kanban Board
-                  </Link>
-                  <Link
-                    to="/projects"
-                    className="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Projects
-                  </Link>
-                  <Link
-                    to="/issues"
-                    className="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Issues
-                  </Link>
-                  <Link
-                    to="/analytics"
-                    className="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Analytics
-                  </Link>
-                </div>
-              )}
-            </div>
+          {isAuthenticated && (
+            <nav className="view-tabs" aria-label="Main views">
+              {navLinks.map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) => `view-tab${isActive ? ' active' : ''}`}
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+          )}
 
-            <div className="flex items-center space-x-4">
-              {isAuthenticated ? (
-                <button
-                  onClick={() => useAppStore.getState().logout()}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm font-medium"
-                >
-                  Logout
-                </button>
-              ) : (
-                <button
-                  onClick={() => alert('Login/Register coming in next sprint!')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-                >
-                  Login
-                </button>
-              )}
-            </div>
+          <div className="header-actions">
+            {isAuthenticated ? (
+              <button
+                onClick={() => useAppStore.getState().logout()}
+                className="ghost-button"
+              >
+                Logout
+              </button>
+            ) : (
+              <button
+                onClick={() => alert('Login/Register coming in next sprint!')}
+                className="primary-button"
+              >
+                Login
+              </button>
+            )}
           </div>
         </div>
-      </nav>
+      </header>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="content-shell">
         <Routes>
           {/* Landing/Login page */}
           {!isAuthenticated ? (
