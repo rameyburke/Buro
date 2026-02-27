@@ -9,6 +9,7 @@ import { AnalyticsPage } from './pages/Analytics';
 import { ProjectsPage } from './pages/Projects';
 import { IssuesPage } from './pages/Issues';
 import { LoginPage } from './pages/Login';
+import { ProjectSelector } from './components/navigation/ProjectSelector';
 
 // Main App Component
 function App() {
@@ -65,6 +66,7 @@ function App() {
           )}
 
           <div className="header-actions">
+            {isAuthenticated && <ProjectSelector />}
             {isAuthenticated ? (
               <button
                 onClick={() => useAppStore.getState().logout()}
