@@ -14,8 +14,8 @@
 
 import React, { useState } from 'react'
 import useAppStore from '../stores/appStore'
+import type { Project } from '../types/api'
 import { Button } from '../components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 
 // Types for API responses (already defined in types/api.ts)
 // Using local imports for clarity and single responsibility
@@ -24,13 +24,14 @@ export function ProjectsPage() {
   const {
     projects,
     currentProject,
-    isAuthenticated,
     loadProjects,
-    setCurrentProject
+    setCurrentProject,
+    isLoading
   } = useAppStore()
 
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null)
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
 
   // Why local state for form visibility:
   // - Transient UI state that doesn't need global persistence
@@ -44,117 +45,158 @@ export function ProjectsPage() {
     loadProjects()
   }, [loadProjects])
 
-  const handleProjectSelect = (project: any) => {
+  const handleProjectSelect = (project: Project) => {
     setCurrentProject(project)
   }
 
-  const handleCreateProjectSuccess = () => {
-    setShowCreateForm(false)
-    loadProjects() // Refresh the list
+  const handleRefresh = async () => {
+    await loadProjects()
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="projects-page">
+      <div className="projects-header">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-          <p className="text-gray-600">Manage your agile project workspaces</p>
+          <h1>Projects</h1>
+          <p>Manage your agile workspaces and configure project metadata.</p>
         </div>
-
-        <Button
-          onClick={() => setShowCreateForm(true)}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
+        <Button onClick={() => setShowCreateForm(true)} className="bg-blue-600 hover:bg-blue-700">
           + New Project
         </Button>
       </div>
 
-      {/* Current Project Display */}
-      {currentProject && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center">
-                🎯 Current Project: {currentProject.key} - {currentProject.name}
-              </CardTitle>
-              <span className="text-sm text-blue-600 font-medium">Active</span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600">{currentProject.description}</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Created: {new Date(currentProject.created_at).toLocaleDateString()}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <div className="projects-table-wrapper">
+        <table className="projects-table">
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Description</th>
+              <th>Owner</th>
+              <th>Created</th>
+              <th className="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((project) => {
+              const active = currentProject?.id === project.id
+              return (
+                <tr key={project.id} className={active ? 'active-row' : undefined}>
+                  <td>
+                    <div className="project-main">
+                      <span className="project-pill">{project.key}</span>
+                      <div>
+                        <p className="project-name">{project.name}</p>
+                        {active && <span className="active-badge">Active</span>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="project-description">
+                    {project.description || <span className="muted">No description</span>}
+                  </td>
+                  <td>{project.owner_name || <span className="muted">{project.owner_id || '—'}</span>}</td>
+                  <td>{new Date(project.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        className="table-action"
+                        onClick={() => handleProjectSelect(project)}
+                        disabled={active}
+                      >
+                        {active ? 'Selected' : 'Set Active'}
+                      </button>
+                      <button
+                        className="table-action"
+                        onClick={() => setProjectToEdit(project)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="table-action danger"
+                        onClick={() => setProjectToDelete(project)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
 
-      {/* Projects List */}
-      <div className="grid gap-4">
-        {projects.map((project) => (
-          <Card
-            key={project.id}
-            className={`cursor-pointer transition-all ${
-              currentProject?.id === project.id
-                ? 'border-blue-500 ring-1 ring-blue-500'
-                : 'hover:shadow-md'
-            }`}
-            onClick={() => handleProjectSelect(project)}
-          >
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="px-2 py-1 bg-gray-100 text-gray-800 text-sm font-mono rounded">
-                    {project.key}
+            {!isLoading && projects.length === 0 && (
+              <tr>
+                <td colSpan={5}>
+                  <div className="empty-state">
+                    <div className="icon">📂</div>
+                    <h3>No projects yet</h3>
+                    <p>Create your first project to get started.</p>
+                    <Button onClick={() => setShowCreateForm(true)}>
+                      Create Project
+                    </Button>
                   </div>
-                  {project.name}
-                </CardTitle>
-                {currentProject?.id === project.id && (
-                  <span className="text-sm text-blue-600 font-medium">✓ Selected</span>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {project.description && (
-                <p className="text-gray-600 mb-3">{project.description}</p>
-              )}
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <span>Owner: {project.owner_id}</span>
-                <span>Created: {new Date(project.created_at).toLocaleDateString()}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </td>
+              </tr>
+            )}
 
-        {projects.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-4">📂</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-            <p className="text-gray-600 mb-4">Create your first project to get started with agile management.</p>
-            <Button onClick={() => setShowCreateForm(true)}>
-              Create Your First Project
-            </Button>
-          </div>
-        )}
+            {isLoading && (
+              <tr>
+                <td colSpan={5}>
+                  <div className="loading-row">Loading projects…</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {/* Create Project Modal */}
       {showCreateForm && (
-        <ProjectCreateModal
+        <ProjectFormModal
+          mode="create"
           onClose={() => setShowCreateForm(false)}
-          onSuccess={handleCreateProjectSuccess}
+          onSuccess={() => {
+            setShowCreateForm(false)
+            handleRefresh()
+          }}
+        />
+      )}
+
+      {projectToEdit && (
+        <ProjectFormModal
+          mode="edit"
+          project={projectToEdit}
+          onClose={() => setProjectToEdit(null)}
+          onSuccess={() => {
+            setProjectToEdit(null)
+            handleRefresh()
+          }}
+        />
+      )}
+
+      {projectToDelete && (
+        <DeleteProjectModal
+          project={projectToDelete}
+          onClose={() => setProjectToDelete(null)}
+          onDeleted={() => {
+            setProjectToDelete(null)
+            handleRefresh()
+          }}
         />
       )}
     </div>
   )
 }
 
-// Modal Component for creating projects
-function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
+interface ProjectFormModalProps {
+  mode: 'create' | 'edit'
+  project?: Project | null
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function ProjectFormModal({ mode, project, onClose, onSuccess }: ProjectFormModalProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    key: '',
-    description: ''
+    name: project?.name ?? '',
+    key: project?.key ?? '',
+    description: project?.description ?? ''
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -184,10 +226,20 @@ function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuc
 
       // Submit project creation
       // Using global store since project creation affects global state
-      const success = await useAppStore.getState().createProject({
-        ...formData,
-        key: formData.key.toUpperCase()
-      })
+      let success = false
+
+      if (mode === 'create') {
+        success = await useAppStore.getState().createProject({
+          ...formData,
+          key: formData.key.toUpperCase()
+        })
+      } else if (project) {
+        success = await useAppStore.getState().updateProject(project.id, {
+          name: formData.name,
+          key: formData.key.toUpperCase(),
+          description: formData.description
+        })
+      }
 
       if (success) {
         onSuccess()
@@ -203,9 +255,9 @@ function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuc
 
   return (
     // Simple modal overlay - could use a proper modal library like Radix or Headless UI
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-        <h2 className="text-xl font-bold mb-4">Create New Project</h2>
+    <div className="modal-overlay">
+      <div className="modal-card">
+        <h2 className="modal-title">{mode === 'create' ? 'Create Project' : 'Edit Project'}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {errors.general && (
@@ -215,14 +267,12 @@ function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuc
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Project Name *
-            </label>
+            <label className="form-label">Project Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-input"
               placeholder="My Agile Project"
               required
             />
@@ -230,14 +280,12 @@ function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Project Key *
-            </label>
+            <label className="form-label">Project Key *</label>
             <input
               type="text"
               value={formData.key}
               onChange={(e) => setFormData({ ...formData, key: e.target.value.toUpperCase() })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="form-input font-mono"
               placeholder="PROJ"
               maxLength={10}
               required
@@ -249,18 +297,16 @@ function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
+            <label className="form-label">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-20"
+              className="form-textarea"
               placeholder="Optional description of the project and its goals..."
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="modal-actions">
             <Button
               type="button"
               variant="outline"
@@ -273,10 +319,55 @@ function ProjectCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuc
               type="submit"
               disabled={loading || !formData.name.trim() || !formData.key.trim()}
             >
-              {loading ? 'Creating...' : 'Create Project'}
+              {loading ? 'Saving…' : mode === 'create' ? 'Create Project' : 'Save Changes'}
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function DeleteProjectModal({ project, onClose, onDeleted }: { project: Project, onClose: () => void, onDeleted: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDelete = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const success = await useAppStore.getState().deleteProject(project.id)
+      if (success) {
+        onDeleted()
+      } else {
+        setError('Unable to delete project. Please try again.')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Unable to delete project. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-card">
+        <h2 className="modal-title">Delete Project</h2>
+        <p className="text-sm text-gray-600">
+          This action cannot be undone. Issues under <strong>{project.key}</strong> will remain but the
+          project container will be removed.
+        </p>
+        {error && <div className="text-red-600 text-sm bg-red-50 p-2 rounded mt-3">{error}</div>}
+
+        <div className="modal-actions">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button className="bg-red-600 hover:bg-red-700" onClick={handleDelete} disabled={loading}>
+            {loading ? 'Deleting…' : 'Delete Project'}
+          </Button>
+        </div>
       </div>
     </div>
   )

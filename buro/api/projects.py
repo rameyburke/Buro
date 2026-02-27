@@ -21,6 +21,13 @@ class ProjectCreateRequest(BaseModel):
     key: str
     description: Optional[str] = None
 
+
+class ProjectUpdateRequest(BaseModel):
+    """Schema for updating projects."""
+    name: Optional[str] = None
+    key: Optional[str] = None
+    description: Optional[str] = None
+
 class ProjectResponse(BaseModel):
     """Project information response schema."""
     id: str
@@ -28,6 +35,7 @@ class ProjectResponse(BaseModel):
     key: str
     description: Optional[str]
     owner_id: str
+    owner_name: Optional[str]
     default_assignee_id: Optional[str]
     created_at: str
     updated_at: str
@@ -40,6 +48,7 @@ class ProjectResponse(BaseModel):
             key=project.key,
             description=project.description,
             owner_id=project.owner_id,
+            owner_name=getattr(project.owner, "full_name", None),
             default_assignee_id=project.default_assignee_id,
             created_at=project.created_at.isoformat(),
             updated_at=project.updated_at.isoformat()
@@ -136,6 +145,44 @@ async def get_project(
         )
 
     return ProjectResponse.from_project(project)
+
+
+@router.put("/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str,
+    request: ProjectUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update project metadata with permission checks."""
+    from buro.services.project_service import ProjectService
+
+    project_service = ProjectService(db)
+
+    updates = {k: v for k, v in request.model_dump(exclude_unset=True).items() if v is not None}
+
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid fields to update"
+        )
+
+    project = await project_service.update_project(project_id, updates, current_user)
+    return ProjectResponse.from_project(project)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a project workspace."""
+    from buro.services.project_service import ProjectService
+
+    project_service = ProjectService(db)
+    await project_service.delete_project(project_id, current_user)
+    return None
 
 @router.get("/{project_id}/stats", response_model=dict)
 async def get_project_stats(

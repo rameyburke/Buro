@@ -22,6 +22,7 @@ export interface Project {
   key: string;
   description?: string;
   owner_id: string;
+  owner_name?: string;
   default_assignee_id?: string;
   created_at: string;
   updated_at: string;

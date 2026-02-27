@@ -10,6 +10,7 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
 from buro.models import Project, User, Role, Issue, IssueStatus
@@ -124,12 +125,11 @@ class ProjectService:
         Educational Note: This implements the multi-tenant access control
         that makes projects act as isolated workspaces.
         """
+        loader = selectinload(Project.owner)
         if user.role == Role.ADMIN:
-            # Admins see all projects
-            stmt = select(Project)
+            stmt = select(Project).options(loader)
         else:
-            # Non-admins see only projects they own
-            stmt = select(Project).where(Project.owner_id == user.id)
+            stmt = select(Project).where(Project.owner_id == user.id).options(loader)
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
@@ -156,13 +156,7 @@ class ProjectService:
                 detail="Project not found"
             )
 
-        # Permission check
-        can_edit = (
-            current_user.id == project.owner_id or
-            current_user.role == Role.ADMIN
-        )
-
-        if not can_edit:
+        if not self._user_can_access_project(current_user, project):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Can only edit projects you own"
@@ -184,7 +178,25 @@ class ProjectService:
         await self.db.refresh(project)
         return project
 
-    async def _validate_project_key_unique(self, key: str, exclude_id: str = None) -> None:
+    async def delete_project(self, project_id: str, current_user: User) -> None:
+        """Delete a project if the current user has permission."""
+        project = await self.db.get(Project, project_id)
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+
+        if not self._user_can_access_project(current_user, project):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Can only delete projects you own"
+            )
+
+        await self.db.delete(project)
+        await self.db.commit()
+
+    async def _validate_project_key_unique(self, key: str, exclude_id: Optional[str] = None) -> None:
         """Validate project key uniqueness (helper method)."""
         stmt = select(Project).where(func.lower(Project.key) == key.lower())
         if exclude_id:
@@ -196,6 +208,14 @@ class ProjectService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Project key '{key}' already exists"
             )
+
+    def _user_can_access_project(self, user: User, project: Project) -> bool:
+        """Helper to determine if a user can manage a project."""
+        if user.role == Role.ADMIN:
+            return True
+        if user.role == Role.MANAGER and project.owner_id == user.id:
+            return True
+        return user.id == project.owner_id
 
     async def get_project_stats(self, project_id: str, user: User) -> dict:
         """Calculate project statistics for dashboards.

@@ -38,6 +38,8 @@ interface AppStore extends AppState {
   loadIssues: (projectId?: string) => Promise<boolean>
   createIssue: (issue: IssueCreate) => Promise<boolean>
   createProject: (project: { name: string; key: string; description?: string }) => Promise<boolean>
+  updateProject: (projectId: string, updates: { name?: string; key?: string; description?: string }) => Promise<boolean>
+  deleteProject: (projectId: string) => Promise<boolean>
   updateIssue: (issueId: string, updates: IssueUpdate) => Promise<boolean>
   moveIssue: (issueId: string, newStatus: string) => Promise<boolean>
   setSelectedIssue: (issue: Issue | null) => void
@@ -229,6 +231,37 @@ const useAppStore = create<AppStore>((set, get) => ({
       return true
     } catch (error) {
       console.error('Failed to create project:', error)
+      return false
+    }
+  },
+
+  updateProject: async (
+    projectId: string,
+    updates: { name?: string; key?: string; description?: string }
+  ): Promise<boolean> => {
+    try {
+      await api.updateProject(projectId, updates)
+      await get().loadProjects()
+      return true
+    } catch (error) {
+      console.error('Failed to update project:', error)
+      return false
+    }
+  },
+
+  deleteProject: async (projectId: string): Promise<boolean> => {
+    try {
+      await api.deleteProject(projectId)
+
+      // If the deleted project is currently selected, clear it before reload
+      if (get().currentProject?.id === projectId) {
+        set({ currentProject: null })
+      }
+
+      await get().loadProjects()
+      return true
+    } catch (error) {
+      console.error('Failed to delete project:', error)
       return false
     }
   },
