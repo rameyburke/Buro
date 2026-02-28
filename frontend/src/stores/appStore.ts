@@ -17,10 +17,30 @@ import type {
   Issue,
   Project,
   AuthResponse,
-  KanbanBoard,
   IssueCreate,
   IssueUpdate
 } from '../types/api'
+
+const USERS_CACHE_KEY = 'buro_user_directory'
+const USERS_CACHE_TTL = 1000 * 60 * 60 * 12 // 12 hours
+
+function readUsersFromCache(): { users: User[]; timestamp: number } | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const raw = localStorage.getItem(USERS_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed.data)) return null
+    return { users: parsed.data, timestamp: parsed.timestamp ?? 0 }
+  } catch (error) {
+    console.warn('Failed to read cached users', error)
+    return null
+  }
+}
+
+const cachedUsers = readUsersFromCache()
 
 // Define the store interface with actions
 interface AppStore extends AppState {
@@ -44,6 +64,8 @@ interface AppStore extends AppState {
   moveIssue: (issueId: string, newStatus: string) => Promise<boolean>
   setSelectedIssue: (issue: Issue | null) => void
   refreshKanbanBoard: () => Promise<boolean>
+  loadUsers: () => Promise<boolean>
+  deleteIssue: (issueId: string) => Promise<boolean>
 }
 
 // Why create the store with an interface: TypeScript ensures action signatures
@@ -58,6 +80,10 @@ const useAppStore = create<AppStore>((set, get) => ({
 
   projects: [],
   currentProject: null,
+
+  users: cachedUsers?.users ?? [],
+  usersLoading: false,
+  usersCacheTimestamp: cachedUsers?.timestamp ?? 0,
 
   issues: [],
   kanbanBoard: {
@@ -121,6 +147,7 @@ const useAppStore = create<AppStore>((set, get) => ({
   logout: (): void => {
     // Clear authentication state
     localStorage.removeItem('token')
+    localStorage.removeItem(USERS_CACHE_KEY)
 
     set({
       user: null,
@@ -130,8 +157,31 @@ const useAppStore = create<AppStore>((set, get) => ({
       projects: [],
       currentProject: null,
       issues: [],
-      selectedIssue: null
+      selectedIssue: null,
+      users: [],
+      usersCacheTimestamp: 0
     })
+  },
+
+  loadUsers: async (): Promise<boolean> => {
+    const now = Date.now()
+    const cacheTimestamp = get().usersCacheTimestamp ?? 0
+    if (get().users.length > 0 && now - cacheTimestamp < USERS_CACHE_TTL) {
+      return true
+    }
+
+    set({ usersLoading: true })
+
+    try {
+      const users = await api.getUsers()
+      localStorage.setItem(USERS_CACHE_KEY, JSON.stringify({ data: users, timestamp: now }))
+      set({ users, usersLoading: false, usersCacheTimestamp: now })
+      return true
+    } catch (error) {
+      console.error('Failed to load users:', error)
+      set({ usersLoading: false })
+      return false
+    }
   },
 
   loadAuthFromStorage: (): void => {
@@ -209,9 +259,7 @@ const useAppStore = create<AppStore>((set, get) => ({
 
   createIssue: async (issueData: IssueCreate): Promise<boolean> => {
     try {
-      const newIssue = await api.createIssue(issueData)
-
-      // Refresh the board to show the new issue
+      await api.createIssue(issueData)
       await get().refreshKanbanBoard()
 
       return true
@@ -223,9 +271,7 @@ const useAppStore = create<AppStore>((set, get) => ({
 
   createProject: async (projectData: { name: string; key: string; description?: string }): Promise<boolean> => {
     try {
-      const newProject = await api.createProject(projectData.name, projectData.key, projectData.description)
-
-      // Refresh projects list
+      await api.createProject(projectData.name, projectData.key, projectData.description)
       await get().loadProjects()
 
       return true
@@ -321,6 +367,17 @@ const useAppStore = create<AppStore>((set, get) => ({
       return false
     }
   },
+
+  deleteIssue: async (issueId: string): Promise<boolean> => {
+    try {
+      await api.deleteIssue(issueId)
+      await get().refreshKanbanBoard()
+      return true
+    } catch (error) {
+      console.error('Failed to delete issue:', error)
+      return false
+    }
+  }
 }))
 
 // Export the store hook

@@ -18,7 +18,7 @@ export function AnalyticsPage() {
 
   // Fetch analytics data using custom query hook
   // Why custom hook: Reusable data fetching with loading/error states
-  const { data: overview, loading: overviewLoading, error: overviewError } =
+  const { data: overview, loading: overviewLoading } =
     useQuery(getProjectOverview)
 
   const { data: burndown, loading: burndownLoading } =

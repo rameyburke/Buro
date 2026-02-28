@@ -20,13 +20,6 @@ interface KanbanColumnProps {
   isLoading?: boolean
 }
 
-const STATUS_COLORS: Record<IssueStatus, string> = {
-  backlog: 'bg-gray-100 border-gray-300',
-  to_do: 'bg-blue-50 border-blue-300',
-  in_progress: 'bg-yellow-50 border-yellow-300',
-  done: 'bg-green-50 border-green-300'
-}
-
 const STATUS_COUNT_COLORS: Record<IssueStatus, string> = {
   backlog: 'bg-gray-200 text-gray-700',
   to_do: 'bg-blue-200 text-blue-700',

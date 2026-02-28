@@ -10,6 +10,7 @@ import { ProjectsPage } from './pages/Projects';
 import { IssuesPage } from './pages/Issues';
 import { LoginPage } from './pages/Login';
 import { ProjectSelector } from './components/navigation/ProjectSelector';
+import { BuroLogo } from './components/branding/BuroLogo';
 
 // Main App Component
 function App() {
@@ -48,7 +49,9 @@ function App() {
       <header className="buro-header">
         <div className="header-inner">
           <div className="brand">
-            <Link to="/">Buro</Link>
+            <Link to="/" className="brand-link" aria-label="Buro home">
+              <BuroLogo variant="mark" />
+            </Link>
           </div>
 
           {isAuthenticated && (

@@ -7,9 +7,9 @@
 # - Domain logic separation: User validation, role management, permissions
 # - Why not in models: Models are data containers, services contain business logic
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from fastapi import HTTPException, status
 
 from buro.models import User, Role
@@ -46,8 +46,9 @@ class UserService:
         self,
         current_user: User,
         skip: int = 0,
-        limit: int = 50
-    ) -> List[User]:
+        limit: int = 50,
+        search: Optional[str] = None
+    ) -> Tuple[List[User], int]:
         """List users with pagination and access control.
 
         Why access control here: Only certain roles can list users.
@@ -63,9 +64,27 @@ class UserService:
                 detail="Insufficient permissions to list users"
             )
 
-        stmt = select(User).offset(skip).limit(limit)
+        stmt = select(User)
+        count_stmt = select(func.count()).select_from(User)
+
+        if search:
+            pattern = f"%{search.lower()}%"
+            condition = or_(
+                func.lower(User.full_name).like(pattern),
+                func.lower(User.email).like(pattern)
+            )
+            stmt = stmt.where(condition)
+            count_stmt = count_stmt.where(condition)
+
+        stmt = stmt.offset(skip).limit(limit)
+
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        users = list(result.scalars().all())
+
+        count_result = await self.db.execute(count_stmt)
+        total = count_result.scalar_one()
+
+        return users, total
 
     async def update_user_profile(
         self,

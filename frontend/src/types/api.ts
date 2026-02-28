@@ -28,6 +28,13 @@ export interface Project {
   updated_at: string;
 }
 
+export interface UserListResponse {
+  users: User[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 export type IssueStatus = 'backlog' | 'to_do' | 'in_progress' | 'done';
 export type IssuePriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
 export type IssueType = 'epic' | 'story' | 'task' | 'bug';
@@ -44,8 +51,16 @@ export interface Issue {
   project_id: string;
   reporter_id: string;
   assignee_id?: string;
+  assignee_name?: string;
+  reporter_name?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserState {
+  users: User[];
+  usersLoading: boolean;
+  usersCacheTimestamp?: number;
 }
 
 export interface IssueCreate {
@@ -117,7 +132,7 @@ export interface IssueState {
 }
 
 // Combined app state
-export interface AppState extends AuthState, ProjectState, IssueState {
+export interface AppState extends AuthState, ProjectState, IssueState, UserState {
   // Actions will be defined in the store
 }
 

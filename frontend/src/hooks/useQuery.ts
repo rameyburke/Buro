@@ -23,8 +23,7 @@ const cache = new Map<string, any>()
 
 export function useQuery<T>(
   queryFn: () => Promise<T>,
-  cacheKey?: string,
-  deps: any[] = []
+  cacheKey?: string
 ): QueryState<T> {
   const [state, setState] = useState<QueryState<T>>({
     data: null,
@@ -80,7 +79,7 @@ export function useQuery<T>(
     return () => {
       isMounted = false
     }
-  }, deps) // Re-run when dependencies change
+  }, [cacheKey, queryFn])
 
   return state
 }

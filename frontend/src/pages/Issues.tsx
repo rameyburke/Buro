@@ -12,11 +12,11 @@
 // - Search/filter combinations: Server-side vs client-side filtering.
 //   Server-side: Scalable, reduces data transfer; Client-side: Faster for small datasets.
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import useAppStore from '../stores/appStore'
 import { Button } from '../components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
-import { IssueCard } from '../components/issues/IssueCard'
+import { Card, CardContent } from '../components/ui/card'
+import type { Issue } from '../types/api'
 
 // Why separate page: Issues have complex CRUD needs that deserve dedicated focus
 // Alternative: Inline creation in Kanban board (adds clutter, complex state management)
@@ -24,12 +24,13 @@ export function IssuesPage() {
   const {
     issues,
     currentProject,
-    isAuthenticated,
+    isLoading,
     loadIssues
   } = useAppStore()
 
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [issueToEdit, setIssueToEdit] = useState<Issue | null>(null)
+  const [issueToDelete, setIssueToDelete] = useState<Issue | null>(null)
   const [filters, setFilters] = useState({
     status: '',
     type: '',
@@ -53,11 +54,15 @@ export function IssuesPage() {
     return true
   })
 
-  const handleCreateSuccess = () => {
-    setShowCreateForm(false)
+  const handleRefresh = () => {
     if (currentProject) {
       loadIssues(currentProject.id)
     }
+  }
+
+  const handleCreateSuccess = () => {
+    setShowCreateForm(false)
+    handleRefresh()
   }
 
   if (!currentProject) {
@@ -76,27 +81,20 @@ export function IssuesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="issues-page">
+      <div className="issues-header">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Issues</h1>
-          <p className="text-gray-600">
-            Manage issues for {currentProject.key} - {currentProject.name}
-          </p>
+          <h1>Issues</h1>
+          <p>Track every piece of work inside {currentProject.key} · {currentProject.name}</p>
         </div>
-
-        <Button
-          onClick={() => setShowCreateForm(true)}
-          className="bg-green-600 hover:bg-green-700"
-        >
+        <Button onClick={() => setShowCreateForm(true)} className="bg-green-600 hover:bg-green-700">
           + New Issue
         </Button>
       </div>
 
-      {/* Issue Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {['backlog', 'to_do', 'in_progress', 'done'].map(status => {
-          const count = issues.filter(issue => issue.status === status).length
+      <div className="issue-stats">
+        {['backlog', 'to_do', 'in_progress', 'done'].map((status) => {
+          const count = issues.filter((issue) => issue.status === status).length
           const statusLabel = {
             backlog: 'Backlog',
             to_do: 'To Do',
@@ -115,14 +113,13 @@ export function IssuesPage() {
         })}
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex space-x-4">
+          <div className="issues-filters">
             <select
               value={filters.status}
-              onChange={(e) => setFilters({...filters, status: e.target.value})}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="filter-control"
             >
               <option value="">All Statuses</option>
               <option value="backlog">Backlog</option>
@@ -133,8 +130,8 @@ export function IssuesPage() {
 
             <select
               value={filters.type}
-              onChange={(e) => setFilters({...filters, type: e.target.value})}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+              className="filter-control"
             >
               <option value="">All Types</option>
               <option value="epic">Epic</option>
@@ -154,89 +151,118 @@ export function IssuesPage() {
         </CardContent>
       </Card>
 
-      {/* Issues List */}
-      <div className="space-y-2">
-        {filteredIssues.length === 0 ? (
-          <Card>
-            <CardContent className="pt-12 pb-12">
-              <div className="text-center">
-                <div className="text-4xl mb-4">📋</div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No issues found</h3>
-                <p className="text-gray-600 mb-4">
-                  {issues.length === 0
-                    ? "Create your first issue to get started."
-                    : "Try adjusting your filters."
-                  }
-                </p>
-                <Button onClick={() => setShowCreateForm(true)}>
-                  Create Issue
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+      <div className="issues-table-wrapper">
+        <table className="issues-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>Assignee</th>
+              <th>Updated</th>
+              <th className="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
             {filteredIssues.map((issue) => (
-              <div key={issue.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm text-gray-500">{issue.key}</span>
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                        issue.issue_type === 'bug' ? 'bg-red-100 text-red-700' :
-                        issue.issue_type === 'epic' ? 'bg-purple-100 text-purple-700' :
-                        issue.issue_type === 'story' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {issue.issue_type}
-                      </span>
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                        issue.priority === 'highest' ? 'bg-red-200 text-red-800' :
-                        issue.priority === 'high' ? 'bg-orange-200 text-orange-800' :
-                        issue.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                        'bg-gray-200 text-gray-700'
-                      }`}>
-                        {issue.priority}
-                      </span>
-                    </div>
-
-                    <h3 className="font-medium text-gray-900 mb-2">
-                      {issue.title}
-                    </h3>
-
-                    {issue.description && (
-                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                        {issue.description}
-                      </p>
-                    )}
-
-                    <div className="flex items-center text-xs text-gray-500 gap-4">
-                      <span>Status: <strong>{issue.status.replace('_', ' ').toUpperCase()}</strong></span>
-                      {issue.assignee_id && <span>Assigned to: Developer</span>}
-                      <span>Reporter: User</span>
-                    </div>
+              <tr key={issue.id}>
+                <td>
+                  <div className="issue-key">
+                    <span className="issue-pill">{issue.key}</span>
+                    <span className={`issue-type ${issue.issue_type}`}>{issue.issue_type}</span>
                   </div>
-
-                  <div className="flex space-x-1">
-                    <Button size="sm" variant="outline">
+                </td>
+                <td>
+                  <div className="issue-title">{issue.title}</div>
+                  {issue.description && (
+                    <p className="issue-description">{issue.description}</p>
+                  )}
+                </td>
+                <td>
+                  <span className={`status-badge status-${issue.status}`}>
+                    {issue.status.replace('_', ' ')}
+                  </span>
+                </td>
+                <td>
+                  <span className={`priority-badge priority-${issue.priority}`}>
+                    {issue.priority}
+                  </span>
+                </td>
+                <td>
+                  {issue.assignee_name || issue.assignee_id ? (
+                    issue.assignee_name || issue.assignee_id
+                  ) : (
+                    <span className="muted">Unassigned</span>
+                  )}
+                </td>
+                <td>{new Date(issue.updated_at).toLocaleDateString()}</td>
+                <td>
+                  <div className="table-actions">
+                    <button className="table-action" onClick={() => console.log('view', issue.id)}>
+                      View
+                    </button>
+                    <button className="table-action" onClick={() => setIssueToEdit(issue)}>
                       Edit
-                    </Button>
-                    <Button size="sm" variant="destructive">
+                    </button>
+                    <button className="table-action danger" onClick={() => setIssueToDelete(issue)}>
                       Delete
-                    </Button>
+                    </button>
                   </div>
-                </div>
-              </div>
+                </td>
+              </tr>
             ))}
-          </div>
-        )}
+
+            {!isLoading && filteredIssues.length === 0 && (
+              <tr>
+                <td colSpan={7}>
+                  <div className="empty-state">
+                    <div className="icon">📋</div>
+                    <h3>No issues found</h3>
+                    <p>{issues.length === 0 ? 'Create your first issue to get started.' : 'Try adjusting your filters.'}</p>
+                    <Button onClick={() => setShowCreateForm(true)}>Create Issue</Button>
+                  </div>
+                </td>
+              </tr>
+            )}
+
+            {isLoading && (
+              <tr>
+                <td colSpan={7}>
+                  <div className="loading-row">Loading issues…</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {/* Create Issue Modal */}
       {showCreateForm && (
         <IssueCreateModal
           onClose={() => setShowCreateForm(false)}
           onSuccess={handleCreateSuccess}
+        />
+      )}
+
+      {issueToEdit && (
+        <IssueEditModal
+          issue={issueToEdit}
+          onClose={() => setIssueToEdit(null)}
+          onSuccess={() => {
+            setIssueToEdit(null)
+            handleRefresh()
+          }}
+        />
+      )}
+
+      {issueToDelete && (
+        <IssueDeleteModal
+          issue={issueToDelete}
+          onClose={() => setIssueToDelete(null)}
+          onDeleted={() => {
+            setIssueToDelete(null)
+            handleRefresh()
+          }}
         />
       )}
     </div>
@@ -245,7 +271,7 @@ export function IssuesPage() {
 
 // Issue Creation Modal
 function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const { currentProject, createIssue } = useAppStore()
+  const { currentProject, createIssue, users, usersLoading, loadUsers } = useAppStore()
 
   const [formData, setFormData] = useState({
     title: '',
@@ -257,6 +283,23 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
 
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [assigneeSearch, setAssigneeSearch] = useState('')
+
+  useEffect(() => {
+    if (users.length === 0 && !usersLoading) {
+      loadUsers()
+    }
+  }, [users.length, usersLoading, loadUsers])
+
+  const filteredUsers = useMemo(() => {
+    const query = assigneeSearch.trim().toLowerCase()
+    if (!query) {
+      return users
+    }
+    return users.filter((user) =>
+      user.full_name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
+    )
+  }, [users, assigneeSearch])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -371,16 +414,30 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Assignee (Optional)
             </label>
+            <input
+              type="text"
+              value={assigneeSearch}
+              onChange={(e) => setAssigneeSearch(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+              placeholder="Search team members"
+            />
             <select
               value={formData.assignee_id}
               onChange={(e) => setFormData({ ...formData, assignee_id: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={usersLoading}
             >
               <option value="">Unassigned</option>
-              {/* Would load actual users from API */}
-              <option value="dev1">Developer 1</option>
-              <option value="dev2">Developer 2</option>
+              {filteredUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name} ({user.role})
+                </option>
+              ))}
             </select>
+            {usersLoading && <p className="text-xs text-gray-500 mt-1">Loading users…</p>}
+            {!usersLoading && filteredUsers.length === 0 && (
+              <p className="text-xs text-gray-500 mt-1">No users match "{assigneeSearch}".</p>
+            )}
           </div>
 
           {currentProject && (
@@ -405,6 +462,192 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
               disabled={loading || !formData.title.trim()}
             >
               {loading ? 'Creating...' : 'Create Issue'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function IssueDeleteModal({ issue, onClose, onDeleted }: { issue: Issue, onClose: () => void, onDeleted: () => void }) {
+  const deleteIssue = useAppStore((state) => state.deleteIssue)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDelete = async () => {
+    setLoading(true)
+    setError(null)
+
+    const success = await deleteIssue(issue.id)
+    setLoading(false)
+
+    if (success) {
+      onDeleted()
+    } else {
+      setError('Failed to delete issue. Please try again.')
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-card">
+        <h2 className="modal-title">Delete Issue</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          This action cannot be undone. Issue <strong>{issue.key}</strong> ({issue.title}) will be permanently removed.
+        </p>
+        {error && <div className="text-red-600 text-sm bg-red-50 p-2 rounded mb-3">{error}</div>}
+        <div className="modal-actions">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button className="bg-red-600 hover:bg-red-700" onClick={handleDelete} disabled={loading}>
+            {loading ? 'Deleting…' : 'Delete Issue'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function IssueEditModal({ issue, onClose, onSuccess }: { issue: Issue, onClose: () => void, onSuccess: () => void }) {
+  const updateIssue = useAppStore((state) => state.updateIssue)
+  const users = useAppStore((state) => state.users)
+  const usersLoading = useAppStore((state) => state.usersLoading)
+  const loadUsers = useAppStore((state) => state.loadUsers)
+
+  const [formData, setFormData] = useState({
+    title: issue.title,
+    description: issue.description || '',
+    priority: issue.priority as Issue['priority'],
+    assignee_id: issue.assignee_id || ''
+  })
+  const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [assigneeSearch, setAssigneeSearch] = useState('')
+
+  useEffect(() => {
+    if (users.length === 0 && !usersLoading) {
+      loadUsers()
+    }
+  }, [users.length, usersLoading, loadUsers])
+
+  const filteredUsers = useMemo(() => {
+    const query = assigneeSearch.trim().toLowerCase()
+    if (!query) {
+      return users
+    }
+    return users.filter((user) =>
+      user.full_name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
+    )
+  }, [users, assigneeSearch])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setErrors({})
+
+    if (!formData.title.trim()) {
+      setErrors({ title: 'Title is required' })
+      setLoading(false)
+      return
+    }
+
+    const payload = {
+      title: formData.title.trim(),
+      description: formData.description || undefined,
+      priority: formData.priority,
+      assignee_id: formData.assignee_id || undefined
+    }
+
+    const success = await updateIssue(issue.id, payload)
+    if (success) {
+      onSuccess()
+    } else {
+      setErrors({ general: 'Failed to update issue. Please try again.' })
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-card">
+        <h2 className="modal-title">Edit Issue</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {errors.general && (
+            <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{errors.general}</div>
+          )}
+
+          <div>
+            <label className="form-label">Title *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="form-input"
+              required
+            />
+            {errors.title && <p className="text-red-600 text-sm mt-1">{errors.title}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="form-textarea"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Priority</label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value as Issue['priority'] })}
+                className="form-input"
+              >
+                {['highest', 'high', 'medium', 'low', 'lowest'].map((priority) => (
+                  <option key={priority} value={priority}>{priority}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label">Assignee</label>
+              <input
+                type="text"
+                value={assigneeSearch}
+                onChange={(e) => setAssigneeSearch(e.target.value)}
+                className="form-input mb-2"
+                placeholder="Search team members"
+              />
+              <select
+                value={formData.assignee_id}
+                onChange={(e) => setFormData({ ...formData, assignee_id: e.target.value })}
+                className="form-input"
+                disabled={usersLoading}
+              >
+                <option value="">Unassigned</option>
+                {filteredUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.full_name} ({user.role})
+                  </option>
+                ))}
+              </select>
+              {usersLoading && <p className="text-xs text-gray-500 mt-1">Loading users…</p>}
+              {!usersLoading && filteredUsers.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">No team members match "{assigneeSearch}".</p>
+              )}
+            </div>
+          </div>
+
+          <div className="modal-actions">
+            <Button variant="outline" type="button" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>
         </form>

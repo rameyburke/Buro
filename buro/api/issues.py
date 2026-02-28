@@ -9,6 +9,7 @@
 
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Form
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
@@ -91,6 +92,8 @@ class IssueResponse(BaseModel):
     project_id: str
     reporter_id: str
     assignee_id: Optional[str]
+    assignee_name: Optional[str] = None
+    reporter_name: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -108,6 +111,8 @@ class IssueResponse(BaseModel):
             project_id=issue.project_id,
             reporter_id=issue.reporter_id,
             assignee_id=issue.assignee_id,
+             assignee_name=getattr(issue.assignee, "full_name", None),
+             reporter_name=getattr(issue.reporter, "full_name", None),
             created_at=issue.created_at.isoformat(),
             updated_at=issue.updated_at.isoformat()
         )
@@ -120,6 +125,7 @@ class IssueListResponse(BaseModel):
     limit: int
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=IssueListResponse)
 async def list_issues(
@@ -135,8 +141,12 @@ async def list_issues(
 ):
     """List issues with filtering and pagination."""
     try:
-        # Simple query to get all issues for the project
-        stmt = select(Issue).options(joinedload(Issue.project)).where(Issue.project_id == project_id)
+        # Simple query to get all issues for the project with related data
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee),
+            joinedload(Issue.reporter)
+        ).where(Issue.project_id == project_id)
 
         result = await db.execute(stmt)
         issues = result.unique().scalars().all()
@@ -267,6 +277,7 @@ async def update_issue(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Failed to update issue %s", issue_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update issue"
@@ -350,6 +361,18 @@ async def get_kanban_board(
             kanban_board[status_key].append(IssueResponse.from_issue(issue))
 
     return kanban_board
+
+
+@router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_issue(
+    issue_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete an issue (hard delete for now)."""
+    issue_service = IssueService(db)
+    await issue_service.delete_issue(issue_id, current_user)
+    return None
 
 # TODO: Add endpoints for:
 # - DELETE /{issue_id} (soft delete)

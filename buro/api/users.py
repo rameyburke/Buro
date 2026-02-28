@@ -7,7 +7,7 @@
 # - Role-based access: Admins/managers have more permissions than developers.
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
@@ -38,11 +38,17 @@ class UserResponse(BaseModel):
 class UserListResponse(BaseModel):
     """Paginated user list response."""
     users: List[UserResponse]
+    total: int
+    skip: int
+    limit: int
 
 router = APIRouter()
 
 @router.get("/", response_model=UserListResponse)
 async def list_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    search: Optional[str] = Query(None, description="Search by name or email"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -57,14 +63,18 @@ async def list_users(
     user_service = UserService(db)
 
     try:
-        users = await user_service.get_users(
+        users, total = await user_service.get_users(
             current_user=current_user,
-            skip=0,
-            limit=100
+            skip=skip,
+            limit=limit,
+            search=search
         )
 
         return UserListResponse(
-            users=[UserResponse.from_user(user) for user in users]
+            users=[UserResponse.from_user(user) for user in users],
+            total=total,
+            skip=skip,
+            limit=limit
         )
     except HTTPException:
         raise

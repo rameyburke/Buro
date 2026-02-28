@@ -13,11 +13,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 import os
+import logging
 
 from fastapi import BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from buro.models import User, Issue, Project
+from buro.models import User, Issue
 
 
 class EmailNotificationService:
@@ -42,6 +42,10 @@ class EmailNotificationService:
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
         self.from_email = os.getenv("FROM_EMAIL", self.smtp_username)
 
+        self.logger = logging.getLogger(__name__)
+        enable_flag = os.getenv("ENABLE_EMAIL_NOTIFICATIONS", "false").lower() == "true"
+        self.email_enabled = enable_flag and bool(self.smtp_username and self.smtp_password)
+
         # Email settings
         self.app_name = "Buro - Agile Project Management"
 
@@ -53,6 +57,9 @@ class EmailNotificationService:
         Why background task: Email sending is slow, shouldn't block API response.
         Follows "respond fast, work later" principle of reactive architectures.
         """
+        if not self.email_enabled:
+            self.logger.debug("Email notifications disabled; skipping issue assignment email")
+            return
         subject = f"[{issue.key}] Issue assigned to you"
 
         body = f"""
@@ -95,7 +102,11 @@ class EmailNotificationService:
         Why subscriber list: Notify relevant team members.
         Future enhancement: Add explicit subscription management.
         """
-        if not subscribers:
+        if not subscribers or not self.email_enabled:
+            if not subscribers:
+                self.logger.debug("No subscribers for status change email")
+            else:
+                self.logger.debug("Email notifications disabled; skipping status change email")
             return
 
         subject = f"[{issue.key}] Status changed: {old_status} → {new_status}"
@@ -136,6 +147,10 @@ class EmailNotificationService:
         Why separate method: Standardized onboarding experience.
         Opportunity for welcome email templates and user guides.
         """
+        if not self.email_enabled:
+            self.logger.debug("Email notifications disabled; skipping welcome email")
+            return
+
         subject = f"Welcome to {self.app_name}"
 
         body = f"""
@@ -175,8 +190,8 @@ class EmailNotificationService:
         Why async: Awaits network I/O for SMTP server communication.
         Why try/catch: Network issues shouldn't crash background tasks.
         """
-        if not self.smtp_username or not self.smtp_password:
-            print(f"⚠️  Email sending skipped (SMTP credentials not configured)")
+        if not self.email_enabled:
+            self.logger.debug("Email notifications disabled; skipping send")
             return
 
         try:
@@ -197,14 +212,14 @@ class EmailNotificationService:
             server.send_message(msg)
             server.quit()
 
-            print(f"📧 Email sent: {subject} → {recipient_email}")
+            self.logger.info("📧 Email sent: %s → %s", subject, recipient_email)
 
         except Exception as e:
-            print(f"❌ Failed to send email to {recipient_email}: {e}")
+            self.logger.exception("❌ Failed to send email to %s", recipient_email)
             # In production: Log to error tracking system like Sentry
 
     # Future enhancement: HTML email templates
     def _create_html_email(self, subject: str, body_text: str) -> MIMEMultipart:
         """Future: Create HTML email with professional templates."""
         # Implementation for rich email formatting would go here
-        pass
+        raise NotImplementedError

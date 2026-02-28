@@ -12,13 +12,10 @@ import React from 'react'
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragStartEvent,
   DragOverlay,
-  pointerWithin,
   closestCenter
 } from '@dnd-kit/core'
-import { arrayMove } from '@dnd-kit/sortable'
 import { KanbanColumn } from './KanbanColumn'
 import { IssueCard } from '../issues/IssueCard'
 import useAppStore from '../../stores/appStore'
@@ -41,7 +38,6 @@ export function KanbanBoard() {
   } = useAppStore()
 
   const [dragOverlay, setDragOverlay] = React.useState<Issue | null>(null)
-  const [dragColumnId, setDragColumnId] = React.useState<string | null>(null)
 
   // Load board data when component mounts or project changes
   // Why useEffect: Load data after component mounts
@@ -62,25 +58,10 @@ export function KanbanBoard() {
     }
   }
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event
-
-    if (!active || !over) return
-
-    const activeData = active.data.current as { type: string; issue: Issue }
-    const overData = over.data.current as { type: string; status: string; issue: Issue }
-
-    // Track which column we're dragging over
-    if (overData?.type === 'column') {
-      setDragColumnId(overData.status)
-    }
-  }
-
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
     setDragOverlay(null)
-    setDragColumnId(null)
 
     if (!active || !over) return
 
@@ -142,9 +123,8 @@ export function KanbanBoard() {
 
       <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
         <DndContext
-          collisionDetection={closestCenter} // Center-based collision - prioritizes larger targets
+          collisionDetection={closestCenter}
           onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
         <div         style={{

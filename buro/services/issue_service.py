@@ -240,6 +240,8 @@ class IssueService:
             )
 
         # Apply updates with field-specific validation
+        assignee_notification: Optional[User] = None
+
         for field, value in updates.items():
             if field in ['title', 'description']:
                 # Basic fields - most users can edit
@@ -263,24 +265,39 @@ class IssueService:
                 old_assignee = issue.assignee
                 setattr(issue, field, value)
 
-                # Send notification for assignment changes
-                if background_tasks and assignee:
-                    await self._notify_assignee_change(
-                        assignee, issue, background_tasks
-                    )
+                if assignee:
+                    assignee_notification = assignee
             elif field == 'priority':
                 # Priority changes - validate enum value
                 if value not in [p.value for p in Priority]:
-                        # For Kanban, allow flexible transitions but log for workflow improvement
-                        print(f"WARNING: Non-standard transition from {issue.status.value} to {new_status.value}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid priority value"
+                    )
                 issue.priority = Priority(value)
             elif field == 'status':
                 # Status changes - use workflow method for validation
                 await self.transition_issue_status(issue_id, IssueStatus(value), current_user)
 
         await self.db.commit()
-        await self.db.refresh(issue)
-        return issue
+
+        # Re-load with relationships for response serialization
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee),
+            joinedload(Issue.reporter)
+        ).where(Issue.id == issue.id)
+        result = await self.db.execute(stmt)
+        refreshed_issue = result.unique().scalar_one()
+
+        if background_tasks and assignee_notification is not None:
+            await self._notify_assignee_change(
+                assignee_notification,
+                refreshed_issue,
+                background_tasks
+            )
+
+        return refreshed_issue
 
     async def transition_issue_status(
         self,
@@ -296,8 +313,12 @@ class IssueService:
         Educational Note: Workflow validation prevents invalid states.
         Unlike Scrum which restricts transitions, Kanban allows flexibility.
         """
-        # Eager load project relationship for key generation in response
-        stmt = select(Issue).options(joinedload(Issue.project)).where(Issue.id == issue_id)
+        # Eager load relationships for serialization
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee),
+            joinedload(Issue.reporter)
+        ).where(Issue.id == issue_id)
         result = await self.db.execute(stmt)
         issue = result.unique().scalar_one_or_none()
         if not issue:
@@ -321,10 +342,32 @@ class IssueService:
         await self.db.commit()
 
         # Re-query the issue to get the updated data WITH relationships
-        stmt = select(Issue).options(joinedload(Issue.project)).where(Issue.id == issue.id)
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee),
+            joinedload(Issue.reporter)
+        ).where(Issue.id == issue.id)
         result = await self.db.execute(stmt)
         updated_issue = result.unique().scalar_one()
         return updated_issue
+
+    async def delete_issue(self, issue_id: str, current_user: User) -> None:
+        """Soft delete (currently hard delete) an issue when permitted."""
+        issue = await self.db.get(Issue, issue_id)
+        if not issue:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Issue not found"
+            )
+
+        if not self._user_can_access_issue(current_user, issue):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete this issue"
+            )
+
+        await self.db.delete(issue)
+        await self.db.commit()
 
     async def _get_accessible_project_ids(self, user: User) -> List[str]:
         """Helper method to get project IDs user can access."""
