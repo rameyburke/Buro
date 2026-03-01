@@ -193,8 +193,13 @@ def _get_action_choice() -> str:
         return env_choice
 
     if not sys.stdin.isatty():
-        print("⚙️  Non-interactive environment detected; defaulting to option 1")
-        return "1"
+        default_choice = "2"
+        print(
+            "⚙️  Non-interactive environment detected; defaulting to option",
+            default_choice,
+            "(create tables + seed sample data)",
+        )
+        return default_choice
 
     return input("\nEnter choice (1-2): ").strip()
 
