@@ -47,7 +47,27 @@ jobs:
       - name: Run DB migrations/seed
         run: |
           export INIT_DB_ACTION=2
+          echo "DATABASE_URL is: $DATABASE_URL"
           poetry run python scripts/init_db.py
+
+      - name: Verify database has users
+        run: |
+          poetry run python -c "
+          import asyncio
+          from buro.core.database import AsyncSessionLocal
+          from buro.models import User
+          from sqlalchemy import select
+          
+          async def check():
+              async with AsyncSessionLocal() as session:
+                  result = await session.execute(select(User))
+                  users = result.scalars().all()
+                  print(f'Found {len(users)} users:')
+                  for u in users:
+                      print(f'  - {u.email} (role={u.role.value})')
+          
+          asyncio.run(check())
+          "
 
       - name: Start backend
         run: |
@@ -62,6 +82,13 @@ jobs:
             fi
             sleep 2
           done
+
+      - name: Test login endpoint
+        run: |
+          curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@buro.dev","password":"admin123"}' | head -c 500
+          echo ""
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
