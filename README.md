@@ -162,10 +162,29 @@ Once the backend is running, visit:
 poetry run pytest
 ```
 
-### Frontend Tests
+### Frontend Unit Tests
 ```bash
 cd frontend && npm test
 ```
+
+### End-to-End Tests (Playwright)
+1. (One-time) Install Playwright browsers:
+   ```bash
+   cd frontend
+   npx playwright install --with-deps
+   ```
+2. Ensure the backend is running locally on port 8000 (e.g. `poetry run uvicorn buro.main:app --reload`).
+3. Build the frontend bundle:
+   ```bash
+   cd frontend
+   npm run build
+   ```
+4. Run Playwright tests (this starts a static server on port 4173):
+   ```bash
+   npm run test:e2e
+   ```
+
+> Tip: the helper script `scripts/run-playwright.sh` will build the frontend, launch the backend (`uvicorn`), and execute Playwright in one step.
 
 ## 🚀 Production Deployment
 

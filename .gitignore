@@ -212,3 +212,11 @@ __marimo__/
 .venv_backup_1772174624/bin/python
 .venv_backup_1772174624/bin/python3
 .venv_backup_1772174624/bin/python3.12
+
+# Playwright-specific files
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+local-browsers/
