@@ -105,7 +105,21 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          REACT_APP_API_URL: http://127.0.0.1:8000/api
         run: npm run build
+
+      - name: Start frontend server
+        run: |
+          cd frontend
+          nohup npm run start:e2e > frontend.log 2>&1 &
+          echo $! > frontend.pid
+          for i in {1..30}; do
+            if curl -fs http://127.0.0.1:4173 > /dev/null; then
+              echo "Frontend up" && break
+            fi
+            sleep 1
+          done
 
       - name: Run Playwright tests
         working-directory: frontend
@@ -123,4 +137,7 @@ jobs:
         run: |
           if [ -f backend.pid ]; then
             kill $(cat backend.pid) || true
+          fi
+          if [ -f frontend.pid ]; then
+            kill $(cat frontend.pid) || true
           fi

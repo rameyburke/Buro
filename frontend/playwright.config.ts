@@ -26,11 +26,5 @@ export default defineConfig({
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] }
     }
-  ],
-  webServer: {
-    command: 'npm run start:e2e',
-    url: BASE_URL,
-    timeout: 120_000,
-    reuseExistingServer: !process.env.CI
-  }
+  ]
 })
