@@ -75,15 +75,14 @@ app = FastAPI(
 # CORS configuration for development
 # Why: Allows web browser communication from different origins
 # Security note: In production, specify allowed origins explicitly
+# Note: Cannot use "*" when allow_credentials=True
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "*",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
-        "http://localhost:3001",
         "http://localhost:3002",
         "http://127.0.0.1:3002",
         "http://localhost:4000",
@@ -94,7 +93,7 @@ app.add_middleware(
         "http://127.0.0.1:5000",
         "http://localhost:6000",
         "http://127.0.0.1:6000"
-    ],  # Wildcard + specific React dev server on multiple ports
+    ],  # Specific React dev server on multiple ports - no wildcard when credentials allowed
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=[
