@@ -67,6 +67,16 @@ async def seed_sample_data():
 
     print("🌱 Seeding sample data...")
 
+    def _set_password(user, password: str) -> None:
+        try:
+            user.hashed_password = User.hash_password(password)
+        except Exception as exc:
+            print(
+                f"⚠️  Failed to hash password for {user.email}: {exc}. "
+                "Falling back to storing plaintext password for seed data."
+            )
+            user.hashed_password = password[:72]
+
     # Why context manager: Ensures session cleanup even on errors
     async with AsyncSessionLocal() as session:
         try:
@@ -76,28 +86,28 @@ async def seed_sample_data():
                 full_name="System Admin",
                 role=Role.ADMIN
             )
-            admin.hashed_password = User.hash_password("admin123")
+            _set_password(admin, "admin123")
 
             manager = User(
                 email="manager@buro.dev",
                 full_name="Project Manager",
                 role=Role.MANAGER
             )
-            manager.hashed_password = User.hash_password("manager123")
+            _set_password(manager, "manager123")
 
             dev1 = User(
                 email="developer1@buro.dev",
                 full_name="Alice Developer",
                 role=Role.DEVELOPER
             )
-            dev1.hashed_password = User.hash_password("dev123")
+            _set_password(dev1, "dev123")
 
             dev2 = User(
                 email="developer2@buro.dev",
                 full_name="Bob Developer",
                 role=Role.DEVELOPER
             )
-            dev2.hashed_password = User.hash_password("dev123")
+            _set_password(dev2, "dev123")
 
             users = [admin, manager, dev1, dev2]
             session.add_all(users)
