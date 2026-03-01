@@ -11,9 +11,17 @@
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Ensure repository root is on sys.path so "import buro" works when executing
+# this script directly (e.g., from CI). This avoids having to install the
+# package before running migrations/seed scripts.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # Why import at function level: Avoids circular imports and optional dependencies
 # Tradeoff: Cannot use these globally vs. lazy loading for optional operations
@@ -170,6 +178,27 @@ async def seed_sample_data():
             await session.rollback()
             return False
 
+def _get_action_choice() -> str:
+    """Determine which action to execute (tables only vs seed).
+
+    Priority order:
+    1. INIT_DB_ACTION environment variable (useful for CI/non-interactive envs)
+    2. Non-interactive stdin defaults to "1" (create tables only)
+    3. Interactive prompt asking the user.
+    """
+
+    env_choice = os.getenv("INIT_DB_ACTION")
+    if env_choice in {"1", "2"}:
+        print(f"⚙️  INIT_DB_ACTION={env_choice} (from environment)")
+        return env_choice
+
+    if not sys.stdin.isatty():
+        print("⚙️  Non-interactive environment detected; defaulting to option 1")
+        return "1"
+
+    return input("\nEnter choice (1-2): ").strip()
+
+
 async def main():
     """Main initialization function with user interaction.
 
@@ -196,7 +225,7 @@ async def main():
     print("1. Create tables only")
     print("2. Create tables and seed sample data")
 
-    choice = input("\nEnter choice (1-2): ").strip()
+    choice = _get_action_choice()
 
     success = False
 
