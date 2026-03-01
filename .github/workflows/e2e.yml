@@ -25,7 +25,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/buro
       PYTHONUNBUFFERED: "1"
       ENABLE_EMAIL_NOTIFICATIONS: "false"
-      PLAYWRIGHT_BASE_URL: http://127.0.0.1:4173
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8000
 
     steps:
       - name: Checkout repository
@@ -42,7 +42,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           poetry install --no-interaction
-          poetry run pip install -e .
+          poetry run pip install -e . --force-reinstall
 
       - name: Run DB migrations/seed
         run: |
@@ -71,6 +71,8 @@ jobs:
 
       - name: Start backend
         run: |
+          poetry run pip install -e .
+          export FRONTEND_BUILD_PATH="$(pwd)/frontend/build"
           nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 &
           echo $! > backend.pid
 
@@ -116,25 +118,8 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          REACT_APP_API_URL: http://127.0.0.1:8000/api
+          REACT_APP_API_URL: /api
         run: npm run build
-
-      - name: Start frontend server
-        run: |
-          cd frontend
-          nohup npx serve -s build -l 4173 > frontend.log 2>&1 &
-          echo $! > frontend.pid
-          for i in {1..30}; do
-            if curl -fs http://127.0.0.1:4173 > /dev/null; then
-              echo "Frontend up on port 4173"
-              curl -s http://127.0.0.1:4173 | head -c 200
-              echo ""
-              break
-            fi
-            sleep 1
-          done
-          echo "Frontend log:"
-          cat frontend.log
 
       - name: Run Playwright tests
         working-directory: frontend

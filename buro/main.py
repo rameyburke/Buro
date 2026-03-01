@@ -10,6 +10,7 @@
 # - CORS setup: Essential for web app communication during development.
 #   In production: Restrict origins for security.
 
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -17,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import uvicorn
 
 # Why separate routers: Domain-driven organization
@@ -160,6 +163,19 @@ async def root():
         "redoc": "/redoc",       # ReDoc documentation
         "openapi": "/openapi.json"  # OpenAPI spec
     }
+
+# Serve frontend static files from same origin to avoid CORS
+# Only in development mode (when FRONTEND_BUILD_PATH is set)
+frontend_build_path = os.getenv("FRONTEND_BUILD_PATH")
+if frontend_build_path and Path(frontend_build_path).exists():
+    @app.get("/{path:path}")
+    async def serve_frontend(path: str = ""):
+        """Serve frontend for any non-API route."""
+        index_path = Path(frontend_build_path) / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+        return {"error": "Frontend not found", "path": frontend_build_path}
+
 
 if __name__ == "__main__":
     # Why uvicorn.run(): Production-ready ASGI server
