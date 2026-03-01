@@ -18,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 
@@ -171,14 +170,24 @@ if frontend_build_path and Path(frontend_build_path).exists():
     @app.get("/{path:path}")
     async def serve_frontend(path: str = ""):
         """Serve frontend for any non-API route."""
-        # Don't interfere with API routes (path won't have leading /)
+        from fastapi.responses import JSONResponse
+        
+        # Serve static files directly
+        if path.startswith("static/") or path.startswith("favicon"):
+            file_path = Path(frontend_build_path) / path
+            if file_path.exists():
+                return FileResponse(file_path)
+            return JSONResponse({"error": "Static file not found"}, status_code=404)
+        
+        # Don't interfere with API routes
         if path.startswith("api/"):
-            from fastapi.responses import JSONResponse
             return JSONResponse({"error": "API route not found"}, status_code=404)
+        
+        # Serve index.html for SPA routing
         index_path = Path(frontend_build_path) / "index.html"
         if index_path.exists():
             return FileResponse(index_path)
-        return {"error": "Frontend not found", "path": frontend_build_path}
+        return JSONResponse({"error": "Frontend not found"}, status_code=404)
 
 
 if __name__ == "__main__":
