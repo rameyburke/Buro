@@ -85,10 +85,20 @@ jobs:
 
       - name: Test login endpoint
         run: |
-          curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+          echo "Testing login with correct credentials..."
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://127.0.0.1:8000/api/auth/login \
             -H "Content-Type: application/json" \
-            -d '{"email":"admin@buro.dev","password":"admin123"}' | head -c 500
+            -d '{"email":"admin@buro.dev","password":"admin123"}')
+          HTTP_CODE=$(echo "$RESPONSE" | grep HTTP_CODE | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $BODY"
+          
           echo ""
+          echo "Testing login with wrong password..."
+          curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://127.0.0.1:8000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@buro.dev","password":"wrongpassword"}'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -112,14 +122,19 @@ jobs:
       - name: Start frontend server
         run: |
           cd frontend
-          nohup npm run start:e2e > frontend.log 2>&1 &
+          nohup npx serve -s build -l 4173 > frontend.log 2>&1 &
           echo $! > frontend.pid
           for i in {1..30}; do
             if curl -fs http://127.0.0.1:4173 > /dev/null; then
-              echo "Frontend up" && break
+              echo "Frontend up on port 4173"
+              curl -s http://127.0.0.1:4173 | head -c 200
+              echo ""
+              break
             fi
             sleep 1
           done
+          echo "Frontend log:"
+          cat frontend.log
 
       - name: Run Playwright tests
         working-directory: frontend
