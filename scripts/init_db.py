@@ -12,7 +12,8 @@
 import asyncio
 import os
 from pathlib import Path
-from decouple import config
+
+from dotenv import load_dotenv
 
 # Why import at function level: Avoids circular imports and optional dependencies
 # Tradeoff: Cannot use these globally vs. lazy loading for optional operations
@@ -181,7 +182,8 @@ async def main():
     print("="*40)
 
     # Check environment configuration
-    db_url = config("DATABASE_URL", default="")
+    load_dotenv()
+    db_url = os.getenv("DATABASE_URL", "")
     if not db_url:
         print("❌ DATABASE_URL not found in environment!")
         print("💡 Copy .env.example to .env and fill in your database credentials")
