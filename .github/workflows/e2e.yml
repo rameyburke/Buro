@@ -69,39 +69,6 @@ jobs:
           asyncio.run(check())
           "
 
-      - name: Start backend
-        run: |
-          poetry run pip install -e .
-          export FRONTEND_BUILD_PATH="$(pwd)/frontend/build"
-          nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 &
-          echo $! > backend.pid
-
-      - name: Wait for backend
-        run: |
-          for i in {1..30}; do
-            if curl -fs http://127.0.0.1:8000/docs > /dev/null; then
-              echo "Backend up" && break
-            fi
-            sleep 2
-          done
-
-      - name: Test login endpoint
-        run: |
-          echo "Testing login with correct credentials..."
-          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://127.0.0.1:8000/api/auth/login \
-            -H "Content-Type: application/json" \
-            -d '{"email":"admin@buro.dev","password":"admin123"}')
-          HTTP_CODE=$(echo "$RESPONSE" | grep HTTP_CODE | cut -d: -f2)
-          BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
-          echo "HTTP Code: $HTTP_CODE"
-          echo "Response: $BODY"
-          
-          echo ""
-          echo "Testing login with wrong password..."
-          curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://127.0.0.1:8000/api/auth/login \
-            -H "Content-Type: application/json" \
-            -d '{"email":"admin@buro.dev","password":"wrongpassword"}'
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -120,6 +87,34 @@ jobs:
         env:
           REACT_APP_API_URL: /api
         run: npm run build
+
+      - name: Start backend with frontend
+        run: |
+          poetry run pip install -e . --force-reinstall --no-deps
+          export FRONTEND_BUILD_PATH="$(pwd)/frontend/build"
+          echo "FRONTEND_BUILD_PATH=$FRONTEND_BUILD_PATH"
+          ls -la $FRONTEND_BUILD_PATH/
+          nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 &
+          echo $! > backend.pid
+
+      - name: Wait for backend
+        run: |
+          for i in {1..30}; do
+            if curl -fs http://127.0.0.1:8000/docs > /dev/null; then
+              echo "Backend up" && break
+            fi
+            sleep 2
+          done
+
+      - name: Verify backend serves frontend
+        run: |
+          echo "Frontend content:"
+          curl -s http://127.0.0.1:8000/ | head -c 100
+          echo ""
+          echo "API test:"
+          curl -s -X POST http://127.0.0.1:8000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@buro.dev","password":"admin123"}' | head -c 100
 
       - name: Run Playwright tests
         working-directory: frontend

@@ -171,6 +171,10 @@ if frontend_build_path and Path(frontend_build_path).exists():
     @app.get("/{path:path}")
     async def serve_frontend(path: str = ""):
         """Serve frontend for any non-API route."""
+        # Don't interfere with API routes (path won't have leading /)
+        if path.startswith("api/"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"error": "API route not found"}, status_code=404)
         index_path = Path(frontend_build_path) / "index.html"
         if index_path.exists():
             return FileResponse(index_path)
