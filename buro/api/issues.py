@@ -124,7 +124,7 @@ class IssueListResponse(BaseModel):
     skip: int
     limit: int
 
-router = APIRouter()
+router = APIRouter(trailing_slash=False)
 logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=IssueListResponse)

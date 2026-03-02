@@ -128,15 +128,13 @@ app.include_router(
 app.include_router(
     projects.router,
     prefix="/api/projects",
-    tags=["projects"],
-    trailing_slash=False
+    tags=["projects"]
 )
 
 app.include_router(
     issues.router,
     prefix="/api/issues",
-    tags=["issues"],
-    trailing_slash=False
+    tags=["issues"]
 )
 
 app.include_router(

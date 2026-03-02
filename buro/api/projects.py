@@ -58,7 +58,7 @@ class ProjectListResponse(BaseModel):
     """Paginated project list response."""
     projects: List[ProjectResponse]
 
-router = APIRouter()
+router = APIRouter(trailing_slash=False)
 
 @router.get("/", response_model=ProjectListResponse)
 async def list_projects(
