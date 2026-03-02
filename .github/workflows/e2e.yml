@@ -94,7 +94,7 @@ jobs:
           export FRONTEND_BUILD_PATH="$(pwd)/frontend/build"
           echo "FRONTEND_BUILD_PATH=$FRONTEND_BUILD_PATH"
           ls -la $FRONTEND_BUILD_PATH/
-          nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 &
+          nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
           echo $! > backend.pid
 
       - name: Wait for backend
@@ -118,7 +118,10 @@ jobs:
 
       - name: Run Playwright tests
         working-directory: frontend
-        run: npx playwright test
+        run: |
+          npx playwright test
+          echo "=== Backend log ==="
+          cat ../backend.log
 
       - name: Upload Playwright report
         if: always()
