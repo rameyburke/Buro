@@ -65,7 +65,7 @@ jobs:
                   print(f'Found {len(users)} users:')
                   for u in users:
                       print(f'  - {u.email} (role={u.role.value}, is_active={u.is_active})')
-                      print(f'    hashed_password={repr(u.hashed_password)[:80]}')
+                      print(f'    hashed_password={repr(u.hashed_password)}')
           
           asyncio.run(check())
           "
@@ -95,7 +95,11 @@ jobs:
           pkill -f "uvicorn buro.main:app" || true
           sleep 2
           
-          poetry run pip install -e . --force-reinstall
+          # Ensure fresh install
+          poetry self lock || true
+          poetry install --no-interaction
+          poetry run pip install -e . --force-reinstall --no-cache-dir
+          
           export FRONTEND_BUILD_PATH="$(pwd)/frontend/build"
           echo "FRONTEND_BUILD_PATH=$FRONTEND_BUILD_PATH"
           ls -la $FRONTEND_BUILD_PATH/
