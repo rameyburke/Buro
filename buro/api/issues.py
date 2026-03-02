@@ -137,8 +137,7 @@ async def list_issues(
     skip: int = Query(0, ge=0, description="Number of issues to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of issues to return"),
     db: AsyncSession = Depends(get_db),
-    # Temporarily disable auth to debug
-    # current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """List issues with filtering and pagination."""
     try:
@@ -328,41 +327,48 @@ async def update_issue_status(
 async def get_kanban_board(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    # Temporarily disable auth to debug
-    # current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    """Get project issues organized by Kanban column (Temporarily simplified).
+    """Get project issues organized by Kanban column."""
+    try:
+        # Fetch issues from database grouped by status with eager loading
+        stmt = select(Issue).options(
+            joinedload(Issue.project),  # Eager load project for key generation
+            joinedload(Issue.reporter),  # Optional: for user info
+            joinedload(Issue.assignee)   # Optional: for assignee info
+        ).where(Issue.project_id == project_id)
 
-    Temporarily returns sample data to test CRUD/UI without database issues.
-    TODO: Re-enable database queries once core issues are resolved.
-    """
-    # Fetch real issues from database grouped by status with eager loading
-    # Need to include project relationship for issue.key property
-    stmt = select(Issue).options(
-        joinedload(Issue.project),  # Eager load project for key generation
-        joinedload(Issue.reporter),  # Optional: for user info
-        joinedload(Issue.assignee)   # Optional: for assignee info
-    ).where(Issue.project_id == project_id)
+        result = await db.execute(stmt)
+        issues = result.unique().scalars().all()
 
-    # Apply security filtering if needed
-    # For now, allow access to all issues in the project
-    result = await db.execute(stmt)
-    issues = result.unique().scalars().all()
+        # Group issues by status for Kanban board
+        kanban_board = {
+            "backlog": [],
+            "to_do": [],
+            "in_progress": [],
+            "done": []
+        }
 
-    # Group issues by status for Kanban board
-    kanban_board = {
-        "backlog": [],
-        "to_do": [],
-        "in_progress": [],
-        "done": []
-    }
+        logger.info(f"Found {len(issues)} issues for project {project_id}")
+        for issue in issues:
+            status_key = issue.status.value  # Convert enum to string
+            logger.info(f"Issue {issue.id} has status {status_key}")
+            if status_key in kanban_board:
+                kanban_board[status_key].append(IssueResponse.from_issue(issue))
 
-    for issue in issues:
-        status_key = issue.status.value  # Convert enum to string
-        if status_key in kanban_board:
-            kanban_board[status_key].append(IssueResponse.from_issue(issue))
+        # Log final counts
+        counts = {k: len(v) for k, v in kanban_board.items()}
+        logger.info(f"Kanban board counts: {counts}")
 
-    return kanban_board
+        return kanban_board
+    except Exception as e:
+        logger.error(f"Error in get_kanban_board for project {project_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load kanban board: {e}"
+        )
 
 
 @router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
