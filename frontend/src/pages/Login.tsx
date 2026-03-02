@@ -28,7 +28,7 @@ export function LoginPage() {
     // For demo: use admin credentials that exist in our sample data
     // In real app, user would enter their own credentials
     const demoEmail = 'admin@buro.dev';
-    const demoPassword = 'admin';
+    const demoPassword = 'admin123';
 
     try {
       const success = await login(demoEmail, demoPassword);
