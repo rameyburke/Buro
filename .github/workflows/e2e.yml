@@ -91,11 +91,15 @@ jobs:
 
       - name: Start backend with frontend
         run: |
-          poetry run pip install -e . --force-reinstall --no-deps
+          # Kill any existing backend process
+          pkill -f "uvicorn buro.main:app" || true
+          sleep 2
+          
+          poetry run pip install -e . --force-reinstall
           export FRONTEND_BUILD_PATH="$(pwd)/frontend/build"
           echo "FRONTEND_BUILD_PATH=$FRONTEND_BUILD_PATH"
           ls -la $FRONTEND_BUILD_PATH/
-          nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+          nohup poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000 --reload > backend.log 2>&1 &
           echo $! > backend.pid
 
       - name: Wait for backend
@@ -112,10 +116,11 @@ jobs:
           echo "Frontend content:"
           curl -s http://127.0.0.1:8000/ | head -c 100
           echo ""
-          echo "API test:"
+          echo "API test (admin123):"
           curl -s -X POST http://127.0.0.1:8000/api/auth/login \
             -H "Content-Type: application/json" \
-            -d '{"email":"admin@buro.dev","password":"admin123"}' | head -c 100
+            -d '{"email":"admin@buro.dev","password":"admin123"}'
+          echo ""
 
       - name: Run Playwright tests
         working-directory: frontend
