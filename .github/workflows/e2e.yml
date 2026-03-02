@@ -124,6 +124,13 @@ jobs:
           echo "=== Backend log ==="
           cat ../backend.log
 
+      - name: Upload backend log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: backend.log
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
