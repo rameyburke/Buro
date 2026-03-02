@@ -144,23 +144,17 @@ class User(Base):
         In production: Always hash passwords!
         Use constant-time comparison to prevent timing attacks.
         """
-        print(f"DEBUG verify_password: email={self.email}, hashed_pw={self.hashed_password}, plain={plain_password}")
-        
         if not self.hashed_password:
             logger.warning(f"verify_password: no hashed_password for user {self.email}")
-            print("DEBUG: no hashed_password, returning False")
             return False
 
         # CI bypass: For demo users, accept the expected passwords
         # This helps debug CI issues - remove in production
         logger.info(f"verify_password: checking CI bypass for email={repr(self.email)}, hashed_pw={repr(self.hashed_password)}")
-        print(f"DEBUG: checking CI bypass")
         
         # Also check for known plaintext passwords stored in DB
-        print(f"DEBUG: checking hashed_password in list, value={repr(self.hashed_password)}")
         if self.hashed_password in ["admin123", "manager123", "dev123"]:
             logger.info(f"verify_password: found known plaintext password for {self.email}")
-            print("DEBUG: found known plaintext password, returning True")
             return True
             
         ci_demo_users = ["admin@buro.dev", "manager@buro.dev", "developer1@buro.dev", "developer2@buro.dev"]
@@ -175,7 +169,6 @@ class User(Base):
             expected = ci_demo_passwords.get(self.email)
             if plain_password == expected:
                 logger.info(f"verify_password: CI demo bypass for {self.email}")
-                print("DEBUG: CI demo bypass, returning True")
                 return True
 
         # Development fallback: if plaintext passwords were stored (e.g., when
@@ -183,18 +176,15 @@ class User(Base):
         # direct comparison so test accounts remain usable.
         if self.hashed_password == plain_password:
             logger.info(f"verify_password: plaintext match for user {self.email}")
-            print("DEBUG: plaintext match, returning True")
             return True
 
         # Temporary: Check plain text for demo passwords (shorthand)
         if self.hashed_password in ["admin", "mgr", "dev1", "dev2"]:
             result = self.hashed_password == plain_password
             logger.info(f"verify_password: shorthand check for user {self.email}: {result}")
-            print(f"DEBUG: shorthand check result={result}")
             return result
 
         # Production: Proper hash verification
-        print("DEBUG: falling through to bcrypt verify")
         try:
             result = pwd_context.verify(plain_password, self.hashed_password)
             logger.info(f"verify_password: bcrypt verify for user {self.email}: {result}")
@@ -202,7 +192,6 @@ class User(Base):
         except Exception as e:
             logger.error(f"verify_password: bcrypt verify failed for user {self.email}: {e}")
             logger.error(f"verify_password: hashed_password value: {repr(self.hashed_password)}")
-            print(f"DEBUG: bcrypt verify failed: {e}")
             return False
 
     def can_access_project(self, project_id: str) -> bool:

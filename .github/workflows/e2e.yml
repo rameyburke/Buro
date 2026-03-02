@@ -26,6 +26,7 @@ jobs:
       PYTHONUNBUFFERED: "1"
       ENABLE_EMAIL_NOTIFICATIONS: "false"
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8000
+      SECRET_KEY: your-secret-key-here
 
     steps:
       - name: Checkout repository

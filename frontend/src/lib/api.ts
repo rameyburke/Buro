@@ -41,9 +41,13 @@ async function authenticatedFetch(
     headers.Authorization = `Bearer ${token}`
   }
 
-  // Normalize endpoint - don't add trailing slash, let backend handle it
-  // Some backends (like FastAPI) may redirect (and lose POST body) if trailing slash differs
-  const normalizedEndpoint = endpoint
+  // Ensure trailing slash for REST endpoints to match FastAPI router expectations
+  const hasQuery = endpoint.includes('?') || endpoint.includes('#')
+  const normalizedEndpoint = hasQuery
+    ? endpoint
+    : endpoint.endsWith('/')
+      ? endpoint
+      : `${endpoint}/`
 
   const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
     ...options,

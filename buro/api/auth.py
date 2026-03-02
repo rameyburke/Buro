@@ -13,6 +13,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -29,7 +30,7 @@ security = HTTPBearer()
 
 # Authentication configuration
 # Why environment variables: Don't hardcode secrets in source code
-SECRET_KEY = "your-secret-key-here"  # In production: os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
