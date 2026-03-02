@@ -12,6 +12,8 @@
 
 from datetime import datetime, timedelta
 from typing import Optional
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
@@ -30,6 +32,8 @@ security = HTTPBearer()
 SECRET_KEY = "your-secret-key-here"  # In production: os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+logger = logging.getLogger(__name__)
 
 # Pydantic schemas for request/response validation
 # Why Pydantic: Type validation, automatic documentation, serialization
@@ -184,10 +188,26 @@ async def login(
     result = await db.execute(user_stmt)
     user = result.scalar_one_or_none()
 
+    logger.info(f"Login attempt for {request.email}: user_found={user is not None}")
+    if user:
+        logger.info(f"User found: {user.email}, hashed_password={repr(user.hashed_password)[:50]}")
+
     # Validate credentials
-    if not user or not user.verify_password(request.password):
-        # Why generic message: Don't leak information about valid emails
-        # Helps prevent user enumeration attacks
+    if not user:
+        logger.warning(f"Login failed: user not found for {request.email}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+    
+    try:
+        password_valid = user.verify_password(request.password)
+    except Exception as e:
+        logger.error(f"verify_password exception for {request.email}: {e}")
+        password_valid = False
+    
+    if not password_valid:
+        logger.warning(f"Login failed: invalid password for {request.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"

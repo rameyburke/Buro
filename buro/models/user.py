@@ -13,12 +13,15 @@ from sqlalchemy import Column, String, Boolean, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from passlib.context import CryptContext
 import enum
+import logging
 from typing import Optional, TYPE_CHECKING
 from .base import Base
 
 if TYPE_CHECKING:
     from .project import Project
     from .issue import Issue
+
+logger = logging.getLogger(__name__)
 
 # Why passlib over hashlib/bcrypt directly:
 # - Context manager handles algorithm upgrades automatically
@@ -142,20 +145,31 @@ class User(Base):
         Use constant-time comparison to prevent timing attacks.
         """
         if not self.hashed_password:
+            logger.warning(f"verify_password: no hashed_password for user {self.email}")
             return False
-
-        # Temporary: Check plain text for demo passwords
-        if self.hashed_password in ["admin", "mgr", "dev1", "dev2"]:
-            return self.hashed_password == plain_password
 
         # Development fallback: if plaintext passwords were stored (e.g., when
         # hashing dependencies are unavailable in CI seeding scripts), allow
         # direct comparison so test accounts remain usable.
         if self.hashed_password == plain_password:
+            logger.info(f"verify_password: plaintext match for user {self.email}")
             return True
 
+        # Temporary: Check plain text for demo passwords (shorthand)
+        if self.hashed_password in ["admin", "mgr", "dev1", "dev2"]:
+            result = self.hashed_password == plain_password
+            logger.info(f"verify_password: shorthand check for user {self.email}: {result}")
+            return result
+
         # Production: Proper hash verification
-        return pwd_context.verify(plain_password, self.hashed_password)
+        try:
+            result = pwd_context.verify(plain_password, self.hashed_password)
+            logger.info(f"verify_password: bcrypt verify for user {self.email}: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"verify_password: bcrypt verify failed for user {self.email}: {e}")
+            logger.error(f"verify_password: hashed_password value: {repr(self.hashed_password)}")
+            return False
 
     def can_access_project(self, project_id: str) -> bool:
         """Check if user can access a specific project.
