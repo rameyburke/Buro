@@ -346,14 +346,18 @@ const useAppStore = create<AppStore>((set, get) => ({
 
   refreshKanbanBoard: async (): Promise<boolean> => {
     if (!get().currentProject) {
+      console.log('refreshKanbanBoard: no currentProject')
       return false
     }
 
     try {
+      console.log('refreshKanbanBoard: calling API for project', get().currentProject!.id)
       const kanbanBoard = await api.getKanbanBoard(get().currentProject!.id)
+      console.log('refreshKanbanBoard: received kanbanBoard:', kanbanBoard)
 
       // Get all issues by flattening the kanban board structure
       const allIssues = Object.values(kanbanBoard).flat()
+      console.log('refreshKanbanBoard: flattened to', allIssues.length, 'issues')
 
       set({
         kanbanBoard,
@@ -361,9 +365,11 @@ const useAppStore = create<AppStore>((set, get) => ({
         isLoading: false
       })
 
+      console.log('refreshKanbanBoard: successfully updated state')
       return true
     } catch (error) {
       console.error('Failed to refresh board:', error)
+      console.error('refreshKanbanBoard: error details:', error)
       return false
     }
   },
