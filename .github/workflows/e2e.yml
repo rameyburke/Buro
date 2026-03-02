@@ -64,7 +64,8 @@ jobs:
                   users = result.scalars().all()
                   print(f'Found {len(users)} users:')
                   for u in users:
-                      print(f'  - {u.email} (role={u.role.value})')
+                      print(f'  - {u.email} (role={u.role.value}, is_active={u.is_active})')
+                      print(f'    hashed_password={repr(u.hashed_password)[:80]}')
           
           asyncio.run(check())
           "
