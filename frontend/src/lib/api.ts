@@ -163,19 +163,25 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function getIssues(filters: {
   project_id?: string,
   assignee_id?: string,
+  reporter_id?: string,
   status?: string,
   issue_type?: string
 } = {}): Promise<Issue[]> {
+  const { project_id, ...queryFilters } = filters
   const params = new URLSearchParams()
 
-  // Convert filters to query parameters
-  Object.entries(filters).forEach(([key, value]) => {
+  // Convert remaining filters to query parameters
+  Object.entries(queryFilters).forEach(([key, value]) => {
     if (value && value !== 'undefined' && value !== 'null') {
       params.append(key, value)
     }
   })
 
-  const response = await authenticatedFetch(`/issues?${params}`)
+  const url = project_id
+    ? `/issues/projects/${project_id}/issues/${params.toString() ? '?' + params.toString() : ''}`
+    : `/issues${params.toString() ? '?' + params.toString() : ''}`
+
+  const response = await authenticatedFetch(url)
   const data: IssueListResponse = await response.json()
 
   return data.issues

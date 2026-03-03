@@ -127,9 +127,9 @@ class IssueListResponse(BaseModel):
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=IssueListResponse)
+@router.get("/projects/{project_id}/issues/", response_model=IssueListResponse)
 async def list_issues(
-    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    project_id: str,
     assignee_id: Optional[str] = Query(None, description="Filter by assignee"),
     reporter_id: Optional[str] = Query(None, description="Filter by reporter"),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -137,10 +137,8 @@ async def list_issues(
     skip: int = Query(0, ge=0, description="Number of issues to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of issues to return"),
     db: AsyncSession = Depends(get_db),
-    # Temporarily disable auth to debug
-    # current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    logger.info(f"list_issues called with project_id={project_id}")
     """List issues with filtering and pagination."""
     try:
         # Simple query to get all issues for the project with related data
