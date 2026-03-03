@@ -12,6 +12,6 @@ test.describe('Authentication', () => {
     await expect(page.getByText(/Track and manage your team's work/i)).toBeVisible({ timeout: 30000 })
 
     // Also verify we're on the right page
-    await expect(page).toHaveURL('**/board')
+    await expect(page).toHaveURL('/board')
   })
 })
