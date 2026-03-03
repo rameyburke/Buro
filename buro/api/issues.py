@@ -349,16 +349,10 @@ async def get_kanban_board(
             "done": []
         }
 
-        logger.info(f"Found {len(issues)} issues for project {project_id}")
         for issue in issues:
             status_key = issue.status.value  # Convert enum to string
-            logger.info(f"Issue {issue.id} has status {status_key}")
             if status_key in kanban_board:
                 kanban_board[status_key].append(IssueResponse.from_issue(issue))
-
-        # Log final counts
-        counts = {k: len(v) for k, v in kanban_board.items()}
-        logger.info(f"Kanban board counts: {counts}")
 
         return kanban_board
     except Exception as e:
