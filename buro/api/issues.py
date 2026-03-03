@@ -139,6 +139,7 @@ async def list_issues(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    logger.info(f"list_issues called with project_id={project_id}")
     """List issues with filtering and pagination."""
     try:
         # Simple query to get all issues for the project with related data
