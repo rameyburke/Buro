@@ -2,7 +2,13 @@ import { Page, expect } from '@playwright/test'
 
 export async function loginAsDemoUser(page: Page) {
   page.on('console', msg => console.log('BROWSER LOG:', msg.text()))
-  page.on('requestfailed', req => console.log('FAILED REQUEST:', req.url(), req.failure()?.errorText))
+  page.on('requestfailed', req => {
+    const errorText = req.failure()?.errorText ?? ''
+    if (errorText.includes('ERR_ABORTED') || errorText.includes('NS_BINDING_ABORTED')) {
+      return
+    }
+    console.log('FAILED REQUEST:', req.url(), errorText)
+  })
   page.on('response', res => console.log('API RESPONSE:', res.url(), res.status()))
   
   await page.goto('/login')

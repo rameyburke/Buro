@@ -337,9 +337,9 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Create New Issue</h2>
+    <div className="modal-overlay">
+      <div className="modal-card">
+        <h2 className="modal-title">Create New Issue</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {errors.general && (
@@ -349,14 +349,12 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Issue Title *
-            </label>
+            <label className="form-label">Issue Title *</label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-input"
               placeholder="Brief description of the issue..."
               required
             />
@@ -364,26 +362,22 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
+            <label className="form-label">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"
+              className="form-textarea"
               placeholder="Detailed issue description..."
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Type
-              </label>
+              <label className="form-label">Type</label>
               <select
                 value={formData.issue_type}
                 onChange={(e) => setFormData({ ...formData, issue_type: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
               >
                 <option value="task">Task</option>
                 <option value="bug">Bug</option>
@@ -393,13 +387,11 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priority
-              </label>
+              <label className="form-label">Priority</label>
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="form-input"
               >
                 <option value="lowest">Lowest</option>
                 <option value="low">Low</option>
@@ -411,20 +403,18 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Assignee (Optional)
-            </label>
+            <label className="form-label">Assignee (Optional)</label>
             <input
               type="text"
               value={assigneeSearch}
               onChange={(e) => setAssigneeSearch(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+              className="form-input mb-2"
               placeholder="Search team members"
             />
             <select
               value={formData.assignee_id}
               onChange={(e) => setFormData({ ...formData, assignee_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="form-input"
               disabled={usersLoading}
             >
               <option value="">Unassigned</option>
@@ -448,7 +438,7 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
             </div>
           )}
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="modal-actions">
             <Button
               type="button"
               variant="outline"

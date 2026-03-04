@@ -100,7 +100,15 @@ class IssueService:
         await self.db.commit()
         await self.db.refresh(issue)
 
-        return issue
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee),
+            joinedload(Issue.reporter)
+        ).where(Issue.id == issue.id)
+        result = await self.db.execute(stmt)
+        refreshed_issue = result.unique().scalar_one()
+
+        return refreshed_issue
 
     async def get_issue_by_key(self, project_key: str, issue_number: int) -> Issue:
         """Retrieve issue by human-readable key (PROJ-123).

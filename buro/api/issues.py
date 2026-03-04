@@ -228,8 +228,15 @@ async def create_issue(
             reporter=current_user,  # Mandatory: always set current user as reporter
             assignee_id=request.assignee_id
         )
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee),
+            joinedload(Issue.reporter)
+        ).where(Issue.id == issue.id)
+        result = await db.execute(stmt)
+        hydrated_issue = result.unique().scalar_one()
 
-        return IssueResponse.from_issue(issue)
+        return IssueResponse.from_issue(hydrated_issue)
 
     except HTTPException:
         # Re-raise service layer exceptions
