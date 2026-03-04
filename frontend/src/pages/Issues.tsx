@@ -296,9 +296,12 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
     if (!query) {
       return users
     }
-    return users.filter((user) =>
-      user.full_name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
-    )
+    return users.filter((user) => {
+      const fullName = user.full_name?.trim().toLowerCase() ?? ''
+      const email = user.email?.trim().toLowerCase() ?? ''
+      const role = user.role?.trim().toLowerCase() ?? ''
+      return `${fullName} ${email} ${role}`.includes(query)
+    })
   }, [users, assigneeSearch])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -527,9 +530,12 @@ function IssueEditModal({ issue, onClose, onSuccess }: { issue: Issue, onClose: 
     if (!query) {
       return users
     }
-    return users.filter((user) =>
-      user.full_name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
-    )
+    return users.filter((user) => {
+      const fullName = user.full_name?.trim().toLowerCase() ?? ''
+      const email = user.email?.trim().toLowerCase() ?? ''
+      const role = user.role?.trim().toLowerCase() ?? ''
+      return `${fullName} ${email} ${role}`.includes(query)
+    })
   }, [users, assigneeSearch])
 
   const handleSubmit = async (e: React.FormEvent) => {
