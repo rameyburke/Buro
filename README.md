@@ -52,7 +52,21 @@ A Jira-like agile project management application built with FastAPI backend and 
    poetry run uvicorn buro.main:app --reload --host 127.0.0.1 --port 8000
    ```
 
-   The API will be available at http://localhost:8000
+    The API will be available at http://localhost:8000
+
+### Canonical Local Start (backend + frontend build)
+
+Use this single command to serve the built frontend and API together:
+
+```bash
+FRONTEND_BUILD_PATH="/mnt/c/Users/ramey/source/repos/Buro/frontend/build" \
+SECRET_KEY="your-secret-key-here" \
+poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000
+```
+
+Notes:
+- `FRONTEND_BUILD_PATH` must point to the React build output.
+- `SECRET_KEY` is required for JWT auth. If omitted, the app falls back to the default placeholder key (not recommended for anything beyond local dev).
 
 ## Frontend Setup
 
