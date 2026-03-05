@@ -483,9 +483,10 @@ function IssueViewModal({ issue, onClose, onEdit }: { issue: Issue, onClose: () 
   return (
     <div className="modal-overlay">
       <div className="modal-card view-issue-modal">
+        <h2 className="modal-title view-issue-heading">Issue Details</h2>
         <div className="view-issue-header">
           <div>
-            <div className="view-issue-label">Issue Details</div>
+            <div className="view-issue-label">Overview</div>
             <div className="view-issue-title">{issue.title}</div>
           </div>
           <span className="issue-pill">{issue.key}</span>

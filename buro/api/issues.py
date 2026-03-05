@@ -100,21 +100,29 @@ class IssueResponse(BaseModel):
     @classmethod
     def from_issue(cls, issue: Issue) -> "IssueResponse":
         """Factory method to create response from Issue model."""
+        def enum_value(value: Any) -> str:
+            if hasattr(value, "value"):
+                return value.value
+            return str(value)
+
+        created_at = issue.created_at.isoformat() if issue.created_at else ""
+        updated_at = issue.updated_at.isoformat() if issue.updated_at else ""
+
         return cls(
             id=issue.id,
             key=issue.key,
             title=issue.title,
             description=issue.description,
-            issue_type=issue.issue_type.value,
-            status=issue.status.value,
-            priority=issue.priority.value,
+            issue_type=enum_value(issue.issue_type),
+            status=enum_value(issue.status),
+            priority=enum_value(issue.priority),
             project_id=issue.project_id,
             reporter_id=issue.reporter_id,
             assignee_id=issue.assignee_id,
-             assignee_name=getattr(issue.assignee, "full_name", None),
-             reporter_name=getattr(issue.reporter, "full_name", None),
-            created_at=issue.created_at.isoformat(),
-            updated_at=issue.updated_at.isoformat()
+            assignee_name=getattr(issue.assignee, "full_name", None),
+            reporter_name=getattr(issue.reporter, "full_name", None),
+            created_at=created_at,
+            updated_at=updated_at
         )
 
 class IssueListResponse(BaseModel):
