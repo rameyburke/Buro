@@ -336,6 +336,59 @@
   margin-bottom: 1rem;
 }
 
+.view-issue-modal {
+  max-width: 560px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%);
+}
+
+.view-issue-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+.view-issue-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 0.15rem;
+}
+
+.view-issue-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #5b6478;
+}
+
+.view-issue-section {
+  margin-bottom: 1rem;
+}
+
+.view-issue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.9rem 1.5rem;
+}
+
+.view-issue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.view-issue-value {
+  font-size: 0.95rem;
+  color: #1f2933;
+  line-height: 1.5;
+}
+
 .form-label {
   display: block;
   font-size: 0.85rem;

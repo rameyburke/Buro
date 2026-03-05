@@ -12,7 +12,7 @@
 // - Search/filter combinations: Server-side vs client-side filtering.
 //   Server-side: Scalable, reduces data transfer; Client-side: Faster for small datasets.
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import useAppStore from '../stores/appStore'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
@@ -30,6 +30,7 @@ export function IssuesPage() {
 
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [issueToEdit, setIssueToEdit] = useState<Issue | null>(null)
+  const [issueToView, setIssueToView] = useState<Issue | null>(null)
   const [issueToDelete, setIssueToDelete] = useState<Issue | null>(null)
   const [filters, setFilters] = useState({
     status: '',
@@ -199,7 +200,7 @@ export function IssuesPage() {
                 <td>{new Date(issue.updated_at).toLocaleDateString()}</td>
                 <td>
                   <div className="table-actions">
-                    <button className="table-action" onClick={() => console.log('view', issue.id)}>
+                    <button className="table-action" onClick={() => setIssueToView(issue)}>
                       View
                     </button>
                     <button className="table-action" onClick={() => setIssueToEdit(issue)}>
@@ -251,6 +252,17 @@ export function IssuesPage() {
           onSuccess={() => {
             setIssueToEdit(null)
             handleRefresh()
+          }}
+        />
+      )}
+
+      {issueToView && (
+        <IssueViewModal
+          issue={issueToView}
+          onClose={() => setIssueToView(null)}
+          onEdit={(issue) => {
+            setIssueToView(null)
+            setIssueToEdit(issue)
           }}
         />
       )}
@@ -463,6 +475,69 @@ function IssueCreateModal({ onClose, onSuccess }: { onClose: () => void, onSucce
   )
 }
 
+function IssueViewModal({ issue, onClose, onEdit }: { issue: Issue, onClose: () => void, onEdit: (issue: Issue) => void }) {
+  const assigneeLabel = issue.assignee_name || issue.assignee_id || 'Unassigned'
+  const reporterLabel = issue.reporter_name || issue.reporter_id || 'Unknown'
+  const updatedLabel = new Date(issue.updated_at).toLocaleString()
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-card view-issue-modal">
+        <div className="view-issue-header">
+          <div>
+            <div className="view-issue-label">Issue Details</div>
+            <div className="view-issue-title">{issue.title}</div>
+          </div>
+          <span className="issue-pill">{issue.key}</span>
+        </div>
+
+        <div className="view-issue-section">
+          <div className="view-issue-row">
+            <div className="view-issue-label">Description</div>
+            <div className="view-issue-value">{issue.description || 'No description'}</div>
+          </div>
+        </div>
+
+        <div className="view-issue-grid">
+          <div className="view-issue-row">
+            <div className="view-issue-label">Type</div>
+            <div className="view-issue-value capitalize">{issue.issue_type}</div>
+          </div>
+          <div className="view-issue-row">
+            <div className="view-issue-label">Priority</div>
+            <div className="view-issue-value capitalize">{issue.priority}</div>
+          </div>
+          <div className="view-issue-row">
+            <div className="view-issue-label">Status</div>
+            <div className="view-issue-value capitalize">{issue.status.replace('_', ' ')}</div>
+          </div>
+          <div className="view-issue-row">
+            <div className="view-issue-label">Updated</div>
+            <div className="view-issue-value">{updatedLabel}</div>
+          </div>
+          <div className="view-issue-row">
+            <div className="view-issue-label">Assignee</div>
+            <div className="view-issue-value">{assigneeLabel}</div>
+          </div>
+          <div className="view-issue-row">
+            <div className="view-issue-label">Reporter</div>
+            <div className="view-issue-value">{reporterLabel}</div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <Button variant="outline" type="button" onClick={onClose}>
+            Close
+          </Button>
+          <Button type="button" onClick={() => onEdit(issue)}>
+            Edit
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function IssueDeleteModal({ issue, onClose, onDeleted }: { issue: Issue, onClose: () => void, onDeleted: () => void }) {
   const deleteIssue = useAppStore((state) => state.deleteIssue)
   const [loading, setLoading] = useState(false)
@@ -518,12 +593,17 @@ function IssueEditModal({ issue, onClose, onSuccess }: { issue: Issue, onClose: 
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [assigneeSearch, setAssigneeSearch] = useState('')
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (users.length === 0 && !usersLoading) {
       loadUsers()
     }
   }, [users.length, usersLoading, loadUsers])
+
+  useEffect(() => {
+    titleInputRef.current?.focus()
+  }, [])
 
   const filteredUsers = useMemo(() => {
     const query = assigneeSearch.trim().toLowerCase()
@@ -581,6 +661,7 @@ function IssueEditModal({ issue, onClose, onSuccess }: { issue: Issue, onClose: 
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="form-input"
+              ref={titleInputRef}
               required
             />
             {errors.title && <p className="text-red-600 text-sm mt-1">{errors.title}</p>}

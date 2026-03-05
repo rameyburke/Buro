@@ -63,6 +63,25 @@ test.describe('Issues management', () => {
     await expect(page.getByRole('heading', { name: /Edit Issue/i })).toBeVisible()
     await page.getByRole('button', { name: /^Cancel$/ }).click()
   })
+
+  test('opens view modal and launches edit from it', async ({ page }) => {
+    await goToIssuesPage(page)
+
+    const viewButton = page.getByRole('button', { name: /^View$/ }).first()
+    await expect(viewButton).toBeVisible()
+    await viewButton.click()
+
+    const viewHeading = page.getByRole('heading', { name: /Issue Details/i })
+    await expect(viewHeading).toBeVisible()
+    const viewModal = page.locator('.modal-card').filter({ has: viewHeading })
+    await viewModal.getByRole('button', { name: /^Edit$/ }).click()
+
+    const editHeading = page.getByRole('heading', { name: /Edit Issue/i })
+    await expect(editHeading).toBeVisible()
+    const editModal = page.locator('.modal-card').filter({ has: editHeading })
+    await expect(editModal.locator('input[type="text"]').first()).toBeFocused()
+    await page.getByRole('button', { name: /^Cancel$/ }).click()
+  })
 })
 
 test.describe('Issue creation', () => {
