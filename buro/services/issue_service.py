@@ -8,9 +8,11 @@
 # - Search and filtering: Complex queries for issue discovery
 
 from typing import List, Optional, Dict
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import OperationalError
 from fastapi import HTTPException, status, BackgroundTasks
 
 from buro.models import (
@@ -74,41 +76,57 @@ class IssueService:
                     detail="Invalid assignee"
                 )
 
-        # Generate next issue number for this project
-        # Why MAX() query: Ensures sequential numbering even with deletions
-        number_stmt = select(func.max(Issue.issue_number)).where(
-            Issue.project_id == project_id
+        for attempt in range(3):
+            try:
+                # Generate next issue number for this project
+                # Why MAX() query: Ensures sequential numbering even with deletions
+                number_stmt = select(func.max(Issue.issue_number)).where(
+                    Issue.project_id == project_id
+                )
+                result = await self.db.execute(number_stmt)
+                max_number = result.scalar_one_or_none()
+                next_number = (max_number or 0) + 1
+
+                # Create issue with default values
+                issue = Issue(
+                    issue_number=next_number,
+                    title=title.strip(),
+                    description=description.strip() if description else None,
+                    issue_type=issue_type,
+                    priority=priority,
+                    status=IssueStatus.BACKLOG,  # Default starting status
+                    project_id=project_id,
+                    reporter_id=reporter.id,
+                    assignee_id=assignee_id
+                )
+
+                self.db.add(issue)
+                await self.db.commit()
+                await self.db.refresh(issue)
+
+                stmt = select(Issue).options(
+                    joinedload(Issue.project),
+                    joinedload(Issue.assignee),
+                    joinedload(Issue.reporter)
+                ).where(Issue.id == issue.id)
+                result = await self.db.execute(stmt)
+                refreshed_issue = result.unique().scalar_one()
+
+                return refreshed_issue
+            except OperationalError as exc:
+                await self.db.rollback()
+                if "database is locked" in str(exc).lower() and attempt < 2:
+                    await asyncio.sleep(0.2 * (attempt + 1))
+                    continue
+                raise
+            except Exception:
+                await self.db.rollback()
+                raise
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create issue"
         )
-        result = await self.db.execute(number_stmt)
-        max_number = result.scalar_one_or_none()
-        next_number = (max_number or 0) + 1
-
-        # Create issue with default values
-        issue = Issue(
-            issue_number=next_number,
-            title=title.strip(),
-            description=description.strip() if description else None,
-            issue_type=issue_type,
-            priority=priority,
-            status=IssueStatus.BACKLOG,  # Default starting status
-            project_id=project_id,
-            reporter_id=reporter.id,
-            assignee_id=assignee_id
-        )
-
-        self.db.add(issue)
-        await self.db.commit()
-        await self.db.refresh(issue)
-
-        stmt = select(Issue).options(
-            joinedload(Issue.project),
-            joinedload(Issue.assignee),
-            joinedload(Issue.reporter)
-        ).where(Issue.id == issue.id)
-        result = await self.db.execute(stmt)
-        refreshed_issue = result.unique().scalar_one()
-
-        return refreshed_issue
 
     async def get_issue_by_key(self, project_key: str, issue_number: int) -> Issue:
         """Retrieve issue by human-readable key (PROJ-123).

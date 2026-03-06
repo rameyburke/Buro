@@ -31,11 +31,14 @@ else:
 # - echo=True for development (logs all SQL) helps with debugging
 # - poolclass=StaticPool for SQLite testing, not production PostgreSQL
 # - Tradeoff: Development visibility vs. production performance overhead
+_sqlite_connect_args = {"timeout": 30} if DATABASE_URL.startswith("sqlite") else None
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,  # Set to False in production to avoid log spam
     future=True,  # Ensures SQLAlchemy 2.0 behavior
     poolclass=StaticPool if DATABASE_URL.startswith("sqlite") else None,
+    connect_args=_sqlite_connect_args,
 )
 
 # Why sessionmaker with class_=AsyncSession:

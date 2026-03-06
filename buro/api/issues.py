@@ -250,7 +250,7 @@ async def create_issue(
         # Re-raise service layer exceptions
         raise
     except Exception as e:
-        # Unexpected errors
+        logger.exception("Failed to create issue")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create issue"

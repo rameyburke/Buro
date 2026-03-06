@@ -1,18 +1,41 @@
 import { Page, expect } from '@playwright/test'
 
-export async function loginAsDemoUser(page: Page) {
-  page.on('console', msg => console.log('BROWSER LOG:', msg.text()))
-  page.on('requestfailed', req => {
+type LoginOptions = {
+  logConsole?: boolean
+  logRequests?: boolean
+}
+
+export async function loginAsDemoUser(page: Page, options: LoginOptions = {}) {
+  const { logConsole = true, logRequests = true } = options
+
+  if (logConsole) {
+    page.on('console', msg => console.log('BROWSER LOG:', msg.text()))
+  }
+  if (logRequests) {
+    page.on('requestfailed', req => {
     const errorText = req.failure()?.errorText ?? ''
     if (errorText.includes('ERR_ABORTED') || errorText.includes('NS_BINDING_ABORTED')) {
       return
     }
     console.log('FAILED REQUEST:', req.url(), errorText)
-  })
-  page.on('response', res => console.log('API RESPONSE:', res.url(), res.status()))
+    })
+    page.on('response', res => console.log('API RESPONSE:', res.url(), res.status()))
+  }
   
   await page.goto('/login')
-  await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible({ timeout: 10_000 })
+  const signInHeading = page.getByRole('heading', { name: /sign in/i })
+  const logoutButton = page.getByRole('button', { name: /logout/i })
+
+  await Promise.race([
+    signInHeading.waitFor({ state: 'visible' }),
+    logoutButton.waitFor({ state: 'visible' }),
+    page.waitForURL('**/board')
+  ]).catch(() => undefined)
+
+  if (!(await signInHeading.isVisible().catch(() => false))) {
+    await expect(logoutButton).toBeVisible({ timeout: 10_000 })
+    return
+  }
   
   await page.getByLabel('Email address').fill('admin@buro.dev')
   await page.getByLabel('Password').fill('admin123')

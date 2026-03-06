@@ -14,6 +14,8 @@ async function goToIssuesPage(page) {
   await page.getByRole('link', { name: /^Issues$/ }).click()
   await expect(page).toHaveURL(/\/issues/)
   await expect(page.getByRole('heading', { name: /^Issues$/ })).toBeVisible({ timeout: 15_000 })
+  const issueRow = page.locator('.issues-table tbody tr').first()
+  await expect(issueRow).toBeVisible({ timeout: 15_000 })
 }
 
 async function openCreateIssueModal(page) {
@@ -163,6 +165,9 @@ test.describe('Issue creation', () => {
   })
 
   test('shows error when create fails', async ({ page }) => {
+    await loginAsDemoUser(page, { logConsole: false })
+    await goToIssuesPage(page)
+
     await page.route('**/api/issues/', async (route) => {
       await route.fulfill({
         status: 500,
