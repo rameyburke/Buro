@@ -31,15 +31,23 @@ else:
 # - echo=True for development (logs all SQL) helps with debugging
 # - poolclass=StaticPool for SQLite testing, not production PostgreSQL
 # - Tradeoff: Development visibility vs. production performance overhead
-_sqlite_connect_args = {"timeout": 30} if DATABASE_URL.startswith("sqlite") else None
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+_sqlite_connect_args = {"timeout": 30} if _is_sqlite else {}
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,  # Set to False in production to avoid log spam
-    future=True,  # Ensures SQLAlchemy 2.0 behavior
-    poolclass=StaticPool if DATABASE_URL.startswith("sqlite") else None,
-    connect_args=_sqlite_connect_args,
-)
+_engine_kwargs = {
+    "echo": True,  # Set to False in production to avoid log spam
+    "future": True,  # Ensures SQLAlchemy 2.0 behavior
+}
+
+if _is_sqlite:
+    _engine_kwargs.update(
+        {
+            "poolclass": StaticPool,
+            "connect_args": _sqlite_connect_args,
+        }
+    )
+
+engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 
 # Why sessionmaker with class_=AsyncSession:
 # - AsyncSession supports await operations for non-blocking database calls
