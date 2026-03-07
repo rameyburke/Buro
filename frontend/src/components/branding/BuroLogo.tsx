@@ -11,7 +11,7 @@ type Props = {
 
 export function BuroLogo({
   variant = 'mark',
-  size = 26,
+  size = 32,
   title = 'Buro',
   className,
 }: Props) {

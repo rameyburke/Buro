@@ -118,15 +118,10 @@ export function IssueCard({ issue, isDragging = false, onTitleClick }: IssueCard
             <span className={`px-2 py-0.5 text-[10px] rounded-full font-semibold ${PRIORITY_COLORS[issue.priority]}`}>
               {issue.priority.toUpperCase()}
             </span>
-
-            {issue.assignee_id && (
-              <div className="flex items-center">
-                <div className="w-5 h-5 bg-blue-500 text-white rounded-full text-xs flex items-center justify-center">
-                  {/* Placeholder avatar - could show user's initial */}
-                  A
-                </div>
-              </div>
-            )}
+            <br />
+            <span className="text-xs font-medium text-slate-600">
+              {issue.assignee_name || 'Unassigned'}
+            </span>
           </div>
         </div>
       </div>
