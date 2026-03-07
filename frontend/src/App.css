@@ -806,6 +806,34 @@
   color: #111827;
 }
 
+.kanban-issue-card {
+  border-color: #94a3b8;
+  outline: 1px solid rgba(100, 116, 139, 0.35);
+  outline-offset: 0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.kanban-issue-card * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.issue-card-title {
+  -webkit-user-drag: none;
+}
+
+.kanban-column-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .issue-description {
   color: #6b7280;
   font-size: 0.85rem;

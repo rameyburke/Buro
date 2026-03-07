@@ -15,6 +15,7 @@ import type { Issue } from '../../types/api'
 interface IssueCardProps {
   issue: Issue
   isDragging?: boolean
+  onTitleClick?: (issue: Issue) => void
 }
 
 // Priority color mapping for visual indicator
@@ -34,7 +35,7 @@ const ISSUE_TYPE_ICONS = {
   bug: '🐛'
 }
 
-export function IssueCard({ issue, isDragging = false }: IssueCardProps) {
+export function IssueCard({ issue, isDragging = false, onTitleClick }: IssueCardProps) {
   const {
     attributes,
     listeners,
@@ -55,36 +56,57 @@ export function IssueCard({ issue, isDragging = false }: IssueCardProps) {
   const isActualDragging = dndDragging || isDragging
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-       className={`
-        bg-white border-2 border-gray-300 rounded-lg p-2 mb-3 shadow-md hover:shadow-lg hover:border-blue-300 transition-all text-xs min-h-[60px] w-full
-        ${isActualDragging ? 'opacity-50 shadow-xl rotate-1 scale-105' : ''}
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        draggable={false}
+        className={`
+        kanban-issue-card bg-white border-2 border-slate-300 rounded-lg p-5 mb-6 shadow-sm hover:shadow-md hover:border-slate-400 transition-all text-xs min-h-[80px] w-full
+        ${isActualDragging ? 'opacity-60 shadow-lg scale-[1.01]' : ''}
         cursor-grab hover:cursor-grabbing
       `}
-      {...listeners}
-      onClick={(e) => {
-        // Prevent click when dragging
-        if (!isActualDragging) {
-          console.log('Open issue detail:', issue.id)
-        }
-      }}
-    >
+        {...listeners}
+        onClick={(e) => {
+          // Prevent click when dragging
+          if (!isActualDragging) {
+            console.log('Open issue detail:', issue.id)
+          }
+        }}
+      >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-1 mb-1">
+          <div className="flex items-center gap-2 mb-1">
             <span className="text-sm">{ISSUE_TYPE_ICONS[issue.issue_type]}</span>
-            <span className="text-xs text-gray-500">{issue.key}</span>
+            <span className="issue-pill text-[11px] uppercase tracking-[0.08em]">
+              {issue.key}
+            </span>
           </div>
 
-          <h3 className="font-medium text-xs text-gray-900 mb-1 leading-tight">
+          <button
+            type="button"
+            className="issue-card-title text-base text-slate-700 mb-1 leading-snug text-left hover:text-slate-900 focus:outline-none rounded line-clamp-2 border-0 bg-transparent p-0"
+            style={{ background: 'transparent', border: 'none', padding: 0, fontWeight: 800 }}
+            data-testid="issue-card-title"
+            draggable={false}
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onDragStart={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!isActualDragging) {
+                onTitleClick?.(issue)
+              }
+            }}
+          >
             {issue.title}
-          </h3>
+          </button>
 
           {issue.description && (
-            <p className="text-xs text-gray-600 mb-1 line-clamp-1">
+            <p className="text-xs text-slate-500 mb-2 line-clamp-1">
               {issue.description.length > 50
                 ? `${issue.description.substring(0, 50)}...`
                 : issue.description
@@ -93,7 +115,7 @@ export function IssueCard({ issue, isDragging = false }: IssueCardProps) {
           )}
 
           <div className="flex items-center justify-between">
-            <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${PRIORITY_COLORS[issue.priority]}`}>
+            <span className={`px-2 py-0.5 text-[10px] rounded-full font-semibold ${PRIORITY_COLORS[issue.priority]}`}>
               {issue.priority.toUpperCase()}
             </span>
 

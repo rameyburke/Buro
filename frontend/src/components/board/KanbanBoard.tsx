@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/core'
 import { KanbanColumn } from './KanbanColumn'
 import { IssueCard } from '../issues/IssueCard'
+import { IssueViewModal } from '../issues/IssueViewModal'
 import useAppStore from '../../stores/appStore'
 import type { Issue } from '../../types/api'
 
@@ -38,6 +39,7 @@ export function KanbanBoard() {
   } = useAppStore()
 
   const [dragOverlay, setDragOverlay] = React.useState<Issue | null>(null)
+  const [issueToView, setIssueToView] = React.useState<Issue | null>(null)
 
   // Load board data when component mounts or project changes
   // Why useEffect: Load data after component mounts
@@ -154,6 +156,7 @@ export function KanbanBoard() {
                     status={columnStatus}
                     issues={issues}
                     isLoading={false}
+                    onIssueTitleClick={setIssueToView}
                   />
                 </div>
                 {index < Object.keys(kanbanBoard).length - 1 && (
@@ -173,6 +176,12 @@ export function KanbanBoard() {
             />
           ) : null}
         </DragOverlay>
+        {issueToView ? (
+          <IssueViewModal
+            issue={issueToView}
+            onClose={() => setIssueToView(null)}
+          />
+        ) : null}
         </DndContext>
       </div>
     </div>

@@ -18,6 +18,7 @@ interface KanbanColumnProps {
   status: IssueStatus // Maps to API status enum
   issues: Issue[]
   isLoading?: boolean
+  onIssueTitleClick?: (issue: Issue) => void
 }
 
 const STATUS_COUNT_COLORS: Record<IssueStatus, string> = {
@@ -27,7 +28,13 @@ const STATUS_COUNT_COLORS: Record<IssueStatus, string> = {
   done: 'bg-green-200 text-green-700'
 }
 
-export function KanbanColumn({ title, status, issues, isLoading }: KanbanColumnProps) {
+export function KanbanColumn({
+  title,
+  status,
+  issues,
+  isLoading,
+  onIssueTitleClick
+}: KanbanColumnProps) {
   const {
     setNodeRef,
     isOver
@@ -69,7 +76,7 @@ export function KanbanColumn({ title, status, issues, isLoading }: KanbanColumnP
             </div>
           </div>
         ) : (
-          <div className={`space-y-2 ${isOver ? 'ring-2 ring-blue-400 ring-opacity-50 rounded-lg' : ''}`}>
+          <div className={`kanban-column-list space-y-2 ${isOver ? 'ring-2 ring-blue-400 ring-opacity-50 rounded-lg' : ''}`}>
             <SortableContext
               items={issues.map(issue => issue.id)}
               strategy={verticalListSortingStrategy}
@@ -78,6 +85,7 @@ export function KanbanColumn({ title, status, issues, isLoading }: KanbanColumnP
                 <IssueCard
                   key={issue.id}
                   issue={issue}
+                  onTitleClick={onIssueTitleClick}
                 />
               ))}
             </SortableContext>
