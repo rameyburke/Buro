@@ -10,7 +10,7 @@ export default defineConfig({
   },
   retries: isCI ? 1 : 0,
   reporter: isCI ? [['html', { open: 'never' }]] : 'line',
-  workers: isCI ? 1 : undefined,
+  workers: 1,
   use: {
     baseURL: 'http://127.0.0.1:8000',
     trace: 'on-first-retry',

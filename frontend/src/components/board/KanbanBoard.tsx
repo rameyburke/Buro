@@ -66,15 +66,21 @@ export function KanbanBoard() {
     if (!active || !over) return
 
     const activeData = active.data.current as { type: string; issue: Issue }
-    const overData = over.data.current as { type: string; status: string; issue: Issue }
+    const overData = over.data.current as {
+      type: string
+      status?: string
+      issue?: Issue
+    }
 
     if (activeData?.type !== 'issue') return
 
-    // Only allow drops on column containers, not on individual issues
-    if (overData?.type !== 'column') return
-
     const draggedIssue = activeData.issue
-    const targetColumn = overData?.status
+    const targetColumn =
+      overData?.type === 'column'
+        ? overData.status
+        : overData?.type === 'issue'
+          ? overData.issue?.status
+          : undefined
 
     if (!targetColumn) return
 

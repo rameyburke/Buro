@@ -10,6 +10,7 @@
 #   Never hardcode database credentials!
 
 import asyncio
+import datetime
 import os
 import sys
 from pathlib import Path
@@ -125,6 +126,7 @@ async def seed_sample_data():
             await session.commit()
 
             # Create sample issues
+            now = datetime.datetime.utcnow()
             issues = [
                 Issue(
                     project_id=project.id,
@@ -135,7 +137,8 @@ async def seed_sample_data():
                     description="Create JWT-based authentication with role management",
                     issue_type=IssueType.STORY,
                     status=IssueStatus.IN_PROGRESS,
-                    priority=Priority.HIGH
+                    priority=Priority.HIGH,
+                    started_at=now - datetime.timedelta(days=3)
                 ),
                 Issue(
                     project_id=project.id,

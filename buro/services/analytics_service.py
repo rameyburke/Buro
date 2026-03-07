@@ -13,6 +13,7 @@ from typing import Dict, List, Any, Tuple, Optional
 from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text, and_, desc
+from sqlalchemy.orm import joinedload
 import calendar
 
 from buro.models import Issue, Project, User, IssueStatus, IssueType
@@ -31,7 +32,7 @@ class AnalyticsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_project_overview(self, project_id: str) -> Dict[str, Any]:
+    async def get_project_overview(self, project_id: str, range_label: str) -> Dict[str, Any]:
         """Generate comprehensive project overview metrics.
 
         Why async: Database queries are the bottleneck, keep them async.
@@ -44,8 +45,18 @@ class AnalyticsService:
 
         # Aggregate metrics in optimized queries
         issue_stats = await self._get_issue_status_counts(project_id)
-        velocity_metrics = await self._get_velocity_metrics(project_id, days=30)
-        aging_issues = await self._get_issues_by_age(project_id)
+        start_dt, end_dt, dates = self._get_range_window(range_label)
+        total_issues = sum(issue_stats.values())
+
+        completed_in_range = await self._count_completed_in_range(project_id, start_dt, end_dt)
+        wip_count = await self._count_wip_issues(project_id)
+        avg_cycle_time_hours = await self._get_average_cycle_time_hours(
+            project_id, start_dt, end_dt
+        )
+        burndown = await self.get_burndown_chart_data(project_id, range_label)
+        burndown_delta = 0
+        if burndown["remaining_actual"]:
+            burndown_delta = burndown["remaining_actual"][-1] - burndown["remaining_ideal"][-1]
 
         return {
             "project": {
@@ -54,14 +65,22 @@ class AnalyticsService:
                 "key": project.key
             },
             "overview": {
-                "total_issues": sum(issue_stats.values()),
+                "total_issues": total_issues,
+                "completed_in_range": completed_in_range,
                 "completion_rate": round(
-                    issue_stats["done"] / max(sum(issue_stats.values()), 1) * 100, 1
-                )
+                    completed_in_range / max(total_issues, 1) * 100, 1
+                ),
+                "wip_count": wip_count,
+                "avg_cycle_time_hours": avg_cycle_time_hours,
+                "burndown_delta": burndown_delta
             },
             "issues_by_status": issue_stats,
-            "velocity": velocity_metrics,
-            "aging": aging_issues
+            "range": {
+                "label": range_label,
+                "start": start_dt.isoformat(),
+                "end": end_dt.isoformat(),
+                "days": len(dates)
+            }
         }
 
     async def get_team_velocity_report(
@@ -107,7 +126,7 @@ class AnalyticsService:
         }
 
     async def get_burndown_chart_data(
-        self, project_id: str, issues: List[Issue]
+        self, project_id: str, range_label: str
     ) -> Dict[str, Any]:
         """Generate burndown chart data for Kanban projects.
 
@@ -117,43 +136,45 @@ class AnalyticsService:
         # Simplified burndown for Kanban (focused on work remaining)
         # Real implementation would need: estimation system, target dates
 
-        total_issues = len(issues)
-        completed_issues = sum(1 for issue in issues if issue.status == IssueStatus.DONE)
+        start_dt, end_dt, dates = self._get_range_window(range_label)
 
-        # Ideal burndown line (linear from total to 0)
-        ideal_remaining = list(range(total_issues, 0, -total_issues // max(10, total_issues//2)))
-        ideal_remaining.append(0)  # Always end at 0
+        total_stmt = select(func.count(Issue.id)).where(Issue.project_id == project_id)
+        total_result = await self.db.execute(total_stmt)
+        total_issues = total_result.scalar_one() or 0
 
-        # Current actual burndown (simplified)
-        actual_remaining = total_issues - completed_issues
+        completed_stmt = select(Issue.completed_at).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status == IssueStatus.DONE,
+                Issue.completed_at.is_not(None),
+                Issue.completed_at <= end_dt
+            )
+        )
+        completed_result = await self.db.execute(completed_stmt)
+        completed_dates = [row[0].date() for row in completed_result if row[0]]
 
-        # Create time periods (last 10 work periods)
-        time_labels = [f"Period {i+1}" for i in range(len(ideal_remaining))]
+        completed_by_day = defaultdict(int)
+        for completed_date in completed_dates:
+            completed_by_day[completed_date] += 1
+
+        cumulative_completed = 0
+        remaining_actual = []
+        for day in dates:
+            cumulative_completed += completed_by_day.get(day, 0)
+            remaining_actual.append(max(total_issues - cumulative_completed, 0))
+
+        if len(dates) <= 1:
+            remaining_ideal = [total_issues]
+        else:
+            remaining_ideal = [
+                max(int(round(total_issues - (total_issues * i / (len(dates) - 1)))), 0)
+                for i in range(len(dates))
+            ]
 
         return {
-            "labels": time_labels,
-            "datasets": [
-                {
-                    "label": "Ideal Burndown",
-                    "data": ideal_remaining,
-                    "borderColor": "#3b82f6",
-                    "backgroundColor": "rgba(59, 130, 246, 0.1)",
-                    "fill": False
-                },
-                {
-                    "label": "Actual Progress",
-                    "data": [total_issues] + [actual_remaining] * (len(time_labels)-1),
-                    "borderColor": "#ef4444",
-                    "backgroundColor": "rgba(239, 68, 68, 0.1)",
-                    "fill": False
-                }
-            ],
-            "summary": {
-                "total_issues": total_issues,
-                "completed": completed_issues,
-                "remaining": actual_remaining,
-                "completion_percentage": round(completed_issues / max(total_issues, 1) * 100, 1)
-            }
+            "dates": [day.isoformat() for day in dates],
+            "remaining_actual": remaining_actual,
+            "remaining_ideal": remaining_ideal
         }
 
     async def get_issues_aging_report(self, project_ids: List[str]) -> Dict[str, Any]:
@@ -169,7 +190,9 @@ class AnalyticsService:
             issues = await self._get_issues_with_status_duration(project_id)
 
             for issue in issues:
-                status = issue.status
+                status = issue.status.value
+                if status == IssueStatus.DONE.value:
+                    continue
                 days_in_status = (datetime.datetime.utcnow() - issue.updated_at).days
 
                 aging_by_status[status].append({
@@ -217,12 +240,12 @@ class AnalyticsService:
             and_(
                 Issue.project_id == project_id,
                 Issue.status == IssueStatus.DONE,
-                Issue.updated_at >= cutoff_date
+                Issue.completed_at >= cutoff_date
             )
         )
 
         result = await self.db.execute(stmt)
-        completed_count = result.scalar_one()
+        completed_count = result.scalar_one() or 0
 
         return {
             "period_days": days,
@@ -238,7 +261,7 @@ class AnalyticsService:
             and_(
                 Issue.assignee_id == user_id,
                 Issue.status == IssueStatus.DONE,
-                Issue.updated_at >= cutoff_date
+                Issue.completed_at >= cutoff_date
             )
         )
 
@@ -297,3 +320,236 @@ class AnalyticsService:
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    def _get_range_window(
+        self, range_label: str
+    ) -> Tuple[datetime.datetime, datetime.datetime, List[datetime.date]]:
+        days = self._range_to_days(range_label)
+        end_date = datetime.datetime.utcnow().date()
+        start_date = end_date - datetime.timedelta(days=days - 1)
+
+        dates = [start_date + datetime.timedelta(days=i) for i in range(days)]
+        start_dt = datetime.datetime.combine(start_date, datetime.time.min)
+        end_dt = datetime.datetime.combine(end_date, datetime.time.max)
+
+        return start_dt, end_dt, dates
+
+    def _range_to_days(self, range_label: str) -> int:
+        options = {
+            "7d": 7,
+            "14d": 14,
+            "30d": 30,
+            "90d": 90
+        }
+        return options.get(range_label, 30)
+
+    async def _count_completed_in_range(
+        self, project_id: str, start_dt: datetime.datetime, end_dt: datetime.datetime
+    ) -> int:
+        stmt = select(func.count(Issue.id)).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status == IssueStatus.DONE,
+                Issue.completed_at.is_not(None),
+                Issue.completed_at >= start_dt,
+                Issue.completed_at <= end_dt
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one() or 0
+
+    async def _count_wip_issues(self, project_id: str) -> int:
+        status_values = {IssueStatus.IN_PROGRESS.value, "review"}
+
+        stmt = select(func.count(Issue.id)).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status.in_(status_values)
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one() or 0
+
+    async def _get_average_cycle_time_hours(
+        self, project_id: str, start_dt: datetime.datetime, end_dt: datetime.datetime
+    ) -> float:
+        stmt = select(Issue.started_at, Issue.completed_at).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.completed_at.is_not(None),
+                Issue.started_at.is_not(None),
+                Issue.completed_at >= start_dt,
+                Issue.completed_at <= end_dt
+            )
+        )
+        result = await self.db.execute(stmt)
+        durations = []
+        for started_at, completed_at in result:
+            if started_at and completed_at:
+                duration = completed_at - started_at
+                durations.append(duration.total_seconds() / 3600)
+
+        if not durations:
+            return 0.0
+        return round(sum(durations) / len(durations), 1)
+
+    async def get_cycle_time_trend(
+        self, project_id: str, range_label: str
+    ) -> Dict[str, Any]:
+        start_dt, end_dt, dates = self._get_range_window(range_label)
+
+        stmt = select(Issue.started_at, Issue.completed_at).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.completed_at.is_not(None),
+                Issue.started_at.is_not(None),
+                Issue.completed_at >= start_dt,
+                Issue.completed_at <= end_dt
+            )
+        )
+
+        result = await self.db.execute(stmt)
+        durations_by_day: Dict[datetime.date, List[float]] = defaultdict(list)
+        for started_at, completed_at in result:
+            if started_at and completed_at:
+                day = completed_at.date()
+                duration_hours = (completed_at - started_at).total_seconds() / 3600
+                durations_by_day[day].append(duration_hours)
+
+        avg_series = []
+        for day in dates:
+            values = durations_by_day.get(day, [])
+            if values:
+                avg_series.append(round(sum(values) / len(values), 1))
+            else:
+                avg_series.append(None)
+
+        return {
+            "dates": [day.isoformat() for day in dates],
+            "avg_cycle_time_hours": avg_series
+        }
+
+    async def get_throughput(self, project_id: str, range_label: str) -> Dict[str, Any]:
+        start_dt, end_dt, dates = self._get_range_window(range_label)
+
+        stmt = select(Issue.completed_at).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status == IssueStatus.DONE,
+                Issue.completed_at.is_not(None),
+                Issue.completed_at >= start_dt,
+                Issue.completed_at <= end_dt
+            )
+        )
+        result = await self.db.execute(stmt)
+        counts_by_day = defaultdict(int)
+        for (completed_at,) in result:
+            if completed_at:
+                counts_by_day[completed_at.date()] += 1
+
+        counts_series = [counts_by_day.get(day, 0) for day in dates]
+
+        return {
+            "dates": [day.isoformat() for day in dates],
+            "completed_counts": counts_series
+        }
+
+    async def get_aging_summary(self, project_id: str) -> Dict[str, Any]:
+        now = datetime.datetime.utcnow()
+        stmt = select(Issue.status, Issue.updated_at).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status != IssueStatus.DONE
+            )
+        )
+        result = await self.db.execute(stmt)
+
+        summary: Dict[str, Dict[str, float]] = {}
+        buckets: Dict[str, List[int]] = defaultdict(list)
+        for status, updated_at in result:
+            if updated_at:
+                buckets[status.value].append((now - updated_at).days)
+
+        for status, days_list in buckets.items():
+            if days_list:
+                summary[status] = {
+                    "count": len(days_list),
+                    "avg_age_days": round(sum(days_list) / len(days_list), 1),
+                    "max_age_days": max(days_list)
+                }
+
+        return {
+            "status_breakdown": summary,
+            "generated_at": now.isoformat()
+        }
+
+    async def get_oldest_open_issues(self, project_id: str, limit: int) -> Dict[str, Any]:
+        stmt = select(Issue).options(
+            joinedload(Issue.project),
+            joinedload(Issue.assignee)
+        ).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status != IssueStatus.DONE
+            )
+        ).order_by(Issue.created_at.asc()).limit(limit)
+
+        result = await self.db.execute(stmt)
+        issues = list(result.scalars().all())
+
+        now = datetime.datetime.utcnow()
+        oldest = []
+        for issue in issues:
+            age_days = (now - issue.created_at).days if issue.created_at else 0
+            oldest.append({
+                "key": issue.project.generate_issue_key(issue.issue_number)
+                if issue.project else f"UNKNOWN-{issue.issue_number}",
+                "title": issue.title,
+                "assignee": issue.assignee.full_name if issue.assignee else "Unassigned",
+                "status": issue.status.value,
+                "age_days": age_days
+            })
+
+        return {
+            "issues": oldest,
+            "generated_at": now.isoformat()
+        }
+
+    async def get_workload_distribution(self, project_id: str) -> Dict[str, Any]:
+        stmt = select(Issue.assignee_id, Issue.status, func.count(Issue.id)).where(
+            and_(
+                Issue.project_id == project_id,
+                Issue.status != IssueStatus.DONE
+            )
+        ).group_by(Issue.assignee_id, Issue.status)
+
+        result = await self.db.execute(stmt)
+        workload: Dict[str, Dict[str, Any]] = {}
+        for assignee_id, status, count in result:
+            key = assignee_id or "unassigned"
+            if key not in workload:
+                workload[key] = {
+                    "user_id": assignee_id,
+                    "user_name": "Unassigned",
+                    "status_counts": {},
+                    "wip_total": 0,
+                    "total_active": 0
+                }
+
+            workload[key]["status_counts"][status.value] = count
+            workload[key]["total_active"] += count
+            if status.value in {IssueStatus.IN_PROGRESS.value, "review"}:
+                workload[key]["wip_total"] += count
+
+        # Resolve user names
+        for item in workload.values():
+            if item["user_id"]:
+                user = await self.db.get(User, item["user_id"])
+                if user:
+                    item["user_name"] = user.full_name
+
+        return {
+            "assignees": sorted(
+                workload.values(), key=lambda x: x["wip_total"], reverse=True
+            )
+        }

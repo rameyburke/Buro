@@ -397,6 +397,274 @@
   line-height: 1.5;
 }
 
+/* Analytics Dashboard */
+.analytics-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.analytics-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.analytics-header p {
+  margin-top: 0.25rem;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.analytics-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.kpi-card {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.kpi-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.kpi-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  margin: 0.35rem 0;
+  color: #111827;
+}
+
+.kpi-subtext {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.kpi-skeleton {
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.kpi-green .kpi-value {
+  color: #15803d;
+}
+
+.kpi-blue .kpi-value {
+  color: #2563eb;
+}
+
+.kpi-amber .kpi-value {
+  color: #b45309;
+}
+
+.kpi-red .kpi-value {
+  color: #b91c1c;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.analytics-card-span {
+  min-height: 280px;
+}
+
+.range-picker {
+  display: inline-flex;
+  gap: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  padding: 0.35rem;
+  border-radius: 999px;
+}
+
+.range-pill {
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #6b7280;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.range-pill.active {
+  background: #1f2933;
+  color: #fffdfa;
+}
+
+.chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chart-loading,
+.chart-empty {
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bar-track {
+  width: 100%;
+  background: #f3f4f6;
+  border-radius: 999px;
+  height: 10px;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #1f2933;
+  border-radius: 999px;
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.workload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.workload-row {
+  display: grid;
+  grid-template-columns: 1.2fr 2fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.workload-name {
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.workload-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.workload-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.workload-bar-fill {
+  height: 100%;
+  background: #f97316;
+}
+
+.workload-wip {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.table-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, 1fr);
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #1f2933;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table-header {
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.analytics-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  color: #6b7280;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
 .form-label {
   display: block;
   font-size: 0.85rem;

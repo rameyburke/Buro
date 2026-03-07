@@ -240,6 +240,42 @@ export async function deleteIssue(issueId: string): Promise<void> {
   })
 }
 
+// Analytics endpoints
+export async function getAnalyticsOverview(projectId: string, range: string) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/overview?range=${range}`)
+  return response.json()
+}
+
+export async function getAnalyticsBurndown(projectId: string, range: string) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/burndown?range=${range}`)
+  return response.json()
+}
+
+export async function getAnalyticsCycleTime(projectId: string, range: string) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/cycle-time?range=${range}`)
+  return response.json()
+}
+
+export async function getAnalyticsThroughput(projectId: string, range: string) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/throughput?range=${range}`)
+  return response.json()
+}
+
+export async function getAnalyticsAging(projectId: string) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/aging`)
+  return response.json()
+}
+
+export async function getAnalyticsOldest(projectId: string, limit = 10) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/oldest?limit=${limit}`)
+  return response.json()
+}
+
+export async function getAnalyticsWorkload(projectId: string) {
+  const response = await authenticatedFetch(`/analytics/projects/${projectId}/workload`)
+  return response.json()
+}
+
 // Utility function for parsing issue keys
 export function parseIssueKey(key: string): { projectKey: string, issueNumber: number } {
   const parts = key.split('-')

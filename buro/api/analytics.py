@@ -20,9 +20,25 @@ from buro.services.analytics_service import AnalyticsService
 
 router = APIRouter()
 
+
+async def _get_project_or_403(
+    project_id: str,
+    db: AsyncSession,
+    current_user: User
+) -> Project:
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    return project
+
 @router.get("/projects/{project_id}/overview")
 async def get_project_overview(
     project_id: str,
+    range: Optional[str] = "30d",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -36,37 +52,17 @@ async def get_project_overview(
     - Velocity trends for performance tracking
     - Aging analysis for process optimization
     """
-    # Check access permissions
-    project_service = ProjectService(db)
-
-    try:
-        # User must have access to this project
-        project = await project_service.db.get(Project, project_id)
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found"
-            )
-
-        # Check access (project owner or admin)
-        if (current_user.role != Role.ADMIN and
-            current_user.id != project.owner_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to project analytics"
-            )
-
-    except HTTPException:
-        raise
+    await _get_project_or_403(project_id, db, current_user)
 
     analytics_service = AnalyticsService(db)
-    overview = await analytics_service.get_project_overview(project_id)
+    overview = await analytics_service.get_project_overview(project_id, range or "30d")
 
     return overview
 
 @router.get("/projects/{project_id}/burndown")
 async def get_burndown_chart(
     project_id: str,
+    range: Optional[str] = "30d",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -78,32 +74,80 @@ async def get_burndown_chart(
     Educational Note: Burndown charts show work remaining over time.
     Kanban version: Tracks towards completion goals rather than sprint deadlines.
     """
-    # Access control same as project overview
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-
-    if (current_user.role != Role.ADMIN and
-        current_user.id not in [project.owner_id]):  # Future: team membership
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to project analytics"
-        )
-
-    # Get issues for burndown calculation
-    from buro.services.issue_service import IssueService
-    issue_service = IssueService(db)
-    issues = await issue_service.list_issues(project_id=project_id)
+    await _get_project_or_403(project_id, db, current_user)
 
     analytics_service = AnalyticsService(db)
     burndown_data = await analytics_service.get_burndown_chart_data(
-        project_id, issues
+        project_id, range or "30d"
     )
 
     return burndown_data
+
+
+@router.get("/projects/{project_id}/cycle-time")
+async def get_cycle_time_trend(
+    project_id: str,
+    range: Optional[str] = "30d",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    await _get_project_or_403(project_id, db, current_user)
+
+    analytics_service = AnalyticsService(db)
+    return await analytics_service.get_cycle_time_trend(project_id, range or "30d")
+
+
+@router.get("/projects/{project_id}/throughput")
+async def get_throughput(
+    project_id: str,
+    range: Optional[str] = "30d",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    await _get_project_or_403(project_id, db, current_user)
+
+    analytics_service = AnalyticsService(db)
+    return await analytics_service.get_throughput(project_id, range or "30d")
+
+
+@router.get("/projects/{project_id}/aging")
+@router.get("/projects/{project_id}/aging/")
+async def get_aging_summary(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    await _get_project_or_403(project_id, db, current_user)
+
+    analytics_service = AnalyticsService(db)
+    return await analytics_service.get_aging_summary(project_id)
+
+
+@router.get("/projects/{project_id}/oldest")
+@router.get("/projects/{project_id}/oldest/")
+async def get_oldest_issues(
+    project_id: str,
+    limit: Optional[int] = 10,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    await _get_project_or_403(project_id, db, current_user)
+
+    analytics_service = AnalyticsService(db)
+    return await analytics_service.get_oldest_open_issues(project_id, limit or 10)
+
+
+@router.get("/projects/{project_id}/workload")
+@router.get("/projects/{project_id}/workload/")
+async def get_project_workload(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    await _get_project_or_403(project_id, db, current_user)
+
+    analytics_service = AnalyticsService(db)
+    return await analytics_service.get_workload_distribution(project_id)
 
 @router.get("/velocity/{user_id}")
 async def get_user_velocity(

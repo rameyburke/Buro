@@ -9,6 +9,7 @@
 
 from typing import List, Optional, Dict
 import asyncio
+import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import joinedload
@@ -363,6 +364,12 @@ class IssueService:
         # Kanban workflow: All transitions allowed - Kanban focuses on flow, not rigid process
         # Educational Note: Unlike Scrum which enforces sprint ceremonies and workflows,
         # Kanban allows flexible status transitions to optimize work visualization and flow
+
+        if new_status == IssueStatus.IN_PROGRESS and issue.started_at is None:
+            issue.started_at = datetime.datetime.utcnow()
+
+        if new_status == IssueStatus.DONE and issue.completed_at is None:
+            issue.completed_at = datetime.datetime.utcnow()
 
         issue.status = new_status
         await self.db.commit()

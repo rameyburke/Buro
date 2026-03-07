@@ -10,9 +10,10 @@
 # - Status progression: Simple linear workflow vs. complex state machines.
 #   Agile boards typically use linear progression for clarity.
 
-from sqlalchemy import Column, String, Text, ForeignKey, Integer
+from sqlalchemy import Column, String, Text, ForeignKey, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional, TYPE_CHECKING, List
+import datetime
 import enum
 
 from .base import Base
@@ -117,6 +118,18 @@ class Issue(Base):
         nullable=False,
         default=IssueStatus.BACKLOG,
         comment="Current workflow state in Kanban board"
+    )
+
+    started_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when issue first entered In Progress"
+    )
+
+    completed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when issue was marked Done"
     )
 
     priority: Mapped[Priority] = mapped_column(

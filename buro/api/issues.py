@@ -299,6 +299,7 @@ async def update_issue(
         )
 
 @router.put("/{issue_id}/status", response_model=IssueResponse)
+@router.put("/{issue_id}/status/", response_model=IssueResponse, include_in_schema=False)
 async def update_issue_status(
     issue_id: str,
     new_status: IssueStatus = Form(...),
