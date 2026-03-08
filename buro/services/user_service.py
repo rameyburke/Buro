@@ -68,10 +68,11 @@ class UserService:
         count_stmt = select(func.count()).select_from(User)
 
         if search:
-            pattern = f"%{search.lower()}%"
+            escaped = search.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
             condition = or_(
-                func.lower(User.full_name).like(pattern),
-                func.lower(User.email).like(pattern)
+                func.lower(User.full_name).like(pattern, escape="\\"),
+                func.lower(User.email).like(pattern, escape="\\")
             )
             stmt = stmt.where(condition)
             count_stmt = count_stmt.where(condition)

@@ -22,6 +22,9 @@ from buro.models import (
 )
 
 
+_PROJECT_ISSUE_LOCKS: Dict[str, asyncio.Lock] = {}
+
+
 class IssueService:
     """Business logic for issue management operations.
 
@@ -79,31 +82,32 @@ class IssueService:
 
         for attempt in range(3):
             try:
-                # Generate next issue number for this project
-                # Why MAX() query: Ensures sequential numbering even with deletions
-                number_stmt = select(func.max(Issue.issue_number)).where(
-                    Issue.project_id == project_id
-                )
-                result = await self.db.execute(number_stmt)
-                max_number = result.scalar_one_or_none()
-                next_number = (max_number or 0) + 1
+                async with self._get_project_issue_lock(project_id):
+                    # Generate next issue number for this project
+                    # Why MAX() query: Ensures sequential numbering even with deletions
+                    number_stmt = select(func.max(Issue.issue_number)).where(
+                        Issue.project_id == project_id
+                    )
+                    result = await self.db.execute(number_stmt)
+                    max_number = result.scalar_one_or_none()
+                    next_number = (max_number or 0) + 1
 
-                # Create issue with default values
-                issue = Issue(
-                    issue_number=next_number,
-                    title=title.strip(),
-                    description=description.strip() if description else None,
-                    issue_type=issue_type,
-                    priority=priority,
-                    status=IssueStatus.BACKLOG,  # Default starting status
-                    project_id=project_id,
-                    reporter_id=reporter.id,
-                    assignee_id=assignee_id
-                )
+                    # Create issue with default values
+                    issue = Issue(
+                        issue_number=next_number,
+                        title=title.strip(),
+                        description=description.strip() if description else None,
+                        issue_type=issue_type,
+                        priority=priority,
+                        status=IssueStatus.BACKLOG,  # Default starting status
+                        project_id=project_id,
+                        reporter_id=reporter.id,
+                        assignee_id=assignee_id
+                    )
 
-                self.db.add(issue)
-                await self.db.commit()
-                await self.db.refresh(issue)
+                    self.db.add(issue)
+                    await self.db.commit()
+                    await self.db.refresh(issue)
 
                 stmt = select(Issue).options(
                     joinedload(Issue.project),
@@ -200,7 +204,7 @@ class IssueService:
         if project_id:
             conditions.append(Issue.project_id == project_id)
             # Additional check: user can access this project
-            if current_user and not self._user_can_access_project_by_id(current_user, project_id):
+            if current_user and not await self._user_can_access_project_by_id(current_user, project_id):
                 return []  # User can't access project, return empty list
 
         # User-specific filter for non-admin users
@@ -260,7 +264,7 @@ class IssueService:
             )
 
         # Check if user can edit issues in this project
-        if not self._user_can_access_issue(current_user, issue):
+        if not await self._user_can_access_issue(current_user, issue):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot modify this issue"
@@ -355,7 +359,7 @@ class IssueService:
             )
 
         # Check permissions - anyone who can edit the issue can change status
-        if not self._user_can_access_issue(current_user, issue):
+        if not await self._user_can_access_issue(current_user, issue):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot change issue status"
@@ -393,7 +397,7 @@ class IssueService:
                 detail="Issue not found"
             )
 
-        if not self._user_can_access_issue(current_user, issue):
+        if not await self._user_can_access_issue(current_user, issue):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot delete this issue"
@@ -413,33 +417,46 @@ class IssueService:
             projects = await project_service.list_user_projects(user)
             return [p.id for p in projects]
         else:
-            # Developers see all projects for now
-            # TODO: Implement project membership
-            stmt = select(Project.id)
+            # Developers can access projects where they are reporter or assignee.
+            stmt = select(Issue.project_id).where(
+                or_(Issue.assignee_id == user.id, Issue.reporter_id == user.id)
+            ).distinct()
             result = await self.db.execute(stmt)
             return [row[0] for row in result]
 
     def _user_can_access_project(self, user: User, project: Project) -> bool:
         """Check if user can access a specific project."""
-        if user.role in [Role.ADMIN]:
+        if user.role in [Role.ADMIN, Role.MANAGER, Role.DEVELOPER]:
             return True
-        elif user.role == Role.MANAGER and user.id == project.owner_id:
-            return True
-        else:
-            # Developers can access all projects for now
-            # TODO: Implement project-specific access
-            return True
+        return user.id == project.owner_id
 
-    def _user_can_access_project_by_id(self, user: User, project_id: str) -> bool:
+    async def _user_can_access_project_by_id(self, user: User, project_id: str) -> bool:
         """Check project access without loading full project object."""
-        # TODO: Optimize this - currently simplified
-        return True
+        project = await self.db.get(Project, project_id)
+        if not project:
+            return False
+        return self._user_can_access_project(user, project)
 
-    def _user_can_access_issue(self, user: User, issue: Issue) -> bool:
+    async def _user_can_access_issue(self, user: User, issue: Issue) -> bool:
         """Check if user can access and modify a specific issue."""
-        # For now, if they can access the project, they can access issues in it
-        # This will need optimization and refinement
-        return True
+        if user.role == Role.ADMIN:
+            return True
+
+        if user.id == issue.assignee_id or user.id == issue.reporter_id:
+            return True
+
+        if user.role == Role.MANAGER:
+            project = await self.db.get(Project, issue.project_id)
+            return project is not None and project.owner_id == user.id
+
+        return False
+
+    def _get_project_issue_lock(self, project_id: str) -> asyncio.Lock:
+        lock = _PROJECT_ISSUE_LOCKS.get(project_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _PROJECT_ISSUE_LOCKS[project_id] = lock
+        return lock
 
     async def _notify_assignee_change(
         self, assignee: User, issue: Issue, background_tasks: BackgroundTasks

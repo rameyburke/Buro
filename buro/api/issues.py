@@ -166,16 +166,11 @@ async def list_issues(
             skip=skip,
             limit=limit
         )
-    except Exception as e:
-        print(f"Error in list_issues: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return empty response instead of crashing
-        return IssueListResponse(
-            issues=[],
-            total=0,
-            skip=skip,
-            limit=limit
+    except Exception:
+        logger.exception("Failed to list issues for project %s", project_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to list issues"
         )
 
 @router.get("/{project_key}/{issue_number}", response_model=IssueResponse)
@@ -328,8 +323,6 @@ async def update_issue_status(
 
         return IssueResponse.from_issue(issue)
 
-    except HTTPException:
-        raise
     except HTTPException:
         raise
     except Exception as e:

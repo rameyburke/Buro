@@ -164,16 +164,17 @@ async def get_user_velocity(
     Educational Note: Velocity shows throughput, not natural productivity.
     Individual metrics can be sensitive - careful with privacy considerations.
     """
-    # Permission: Users can view their own velocity, admins can view all
-    if (current_user.id != user_id and current_user.role != Role.ADMIN):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Can only view own velocity metrics"
-        )
-
     # Verify user exists
     target_user = await db.get(User, user_id)
     if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Permission: Users can view their own velocity, admins can view all.
+    # Use same status code/detail to avoid user enumeration.
+    if (current_user.id != user_id and current_user.role != Role.ADMIN):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
