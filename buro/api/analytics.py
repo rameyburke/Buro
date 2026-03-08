@@ -36,6 +36,7 @@ async def _get_project_or_403(
     return project
 
 @router.get("/projects/{project_id}/overview")
+@router.get("/projects/{project_id}/overview/", include_in_schema=False)
 async def get_project_overview(
     project_id: str,
     range: Optional[str] = "30d",
@@ -60,6 +61,7 @@ async def get_project_overview(
     return overview
 
 @router.get("/projects/{project_id}/burndown")
+@router.get("/projects/{project_id}/burndown/", include_in_schema=False)
 async def get_burndown_chart(
     project_id: str,
     range: Optional[str] = "30d",
@@ -85,6 +87,7 @@ async def get_burndown_chart(
 
 
 @router.get("/projects/{project_id}/cycle-time")
+@router.get("/projects/{project_id}/cycle-time/", include_in_schema=False)
 async def get_cycle_time_trend(
     project_id: str,
     range: Optional[str] = "30d",
@@ -98,6 +101,7 @@ async def get_cycle_time_trend(
 
 
 @router.get("/projects/{project_id}/throughput")
+@router.get("/projects/{project_id}/throughput/", include_in_schema=False)
 async def get_throughput(
     project_id: str,
     range: Optional[str] = "30d",

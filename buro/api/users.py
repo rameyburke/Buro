@@ -9,10 +9,10 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 from buro.core.database import get_db
-from buro.models import User
+from buro.models import User, Role
 from buro.api.auth import get_current_user
 
 class UserResponse(BaseModel):
@@ -42,6 +42,24 @@ class UserListResponse(BaseModel):
     skip: int
     limit: int
 
+
+class UserCreateRequest(BaseModel):
+    """Payload for admin-created users.
+
+    Learning note: This endpoint intentionally omits a password field because we
+    generate a temporary secret server-side. Tradeoff: simpler UX and fewer
+    validation rules, but requires secure out-of-band sharing by the admin.
+    """
+
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=255)
+    role: Role
+
+
+class UserCreateResponse(BaseModel):
+    user: UserResponse
+    temporary_password: str
+
 router = APIRouter()
 
 @router.get("/", response_model=UserListResponse)
@@ -49,6 +67,7 @@ async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     search: Optional[str] = Query(None, description="Search by name or email"),
+    include_inactive: bool = Query(False, description="Include deactivated users"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -67,7 +86,8 @@ async def list_users(
             current_user=current_user,
             skip=skip,
             limit=limit,
-            search=search
+            search=search,
+            include_inactive=include_inactive,
         )
 
         return UserListResponse(
@@ -87,6 +107,7 @@ async def get_my_profile(
     return UserResponse.from_user(current_user)
 
 @router.put("/{user_id}", response_model=UserResponse)
+@router.put("/{user_id}/", response_model=UserResponse, include_in_schema=False)
 async def update_user(
     user_id: str,
     updates: dict,  # Would use proper schema in production
@@ -112,3 +133,47 @@ async def update_user(
         return UserResponse.from_user(updated_user)
     except HTTPException:
         raise
+
+
+@router.post("/", response_model=UserCreateResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    payload: UserCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a user via admin maintenance tooling.
+
+    Learning note: Authorization is enforced both in the route and service layer.
+    Defense-in-depth means background jobs or future code paths cannot bypass
+    admin checks by accidentally calling service methods incorrectly.
+    """
+
+    from buro.services.user_service import UserService
+
+    user_service = UserService(db)
+    created_user, temp_password = await user_service.create_user(
+        email=payload.email,
+        full_name=payload.full_name,
+        role=payload.role,
+        current_user=current_user,
+    )
+
+    return UserCreateResponse(
+        user=UserResponse.from_user(created_user), temporary_password=temp_password
+    )
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}/", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+async def deactivate_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Soft-delete/deactivate a user account (admin only)."""
+
+    from buro.services.user_service import UserService
+
+    user_service = UserService(db)
+    await user_service.deactivate_user(user_id=user_id, current_user=current_user)
+    return None

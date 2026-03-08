@@ -25,13 +25,8 @@ export function LoginPage() {
     setLoading(true);
     setError('');
 
-    // For demo: use admin credentials that exist in our sample data
-    // In real app, user would enter their own credentials
-    const demoEmail = 'admin@buro.dev';
-    const demoPassword = 'admin123';
-
     try {
-      const success = await login(demoEmail, demoPassword);
+      const success = await login(email.trim(), password);
       if (success) {
         navigate('/board');
       } else {
@@ -52,7 +47,7 @@ export function LoginPage() {
             Sign in to Buro
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Use demo credentials: <strong>admin@buro.dev / admin</strong>
+            Use demo credentials: <strong>admin@buro.dev / admin123</strong>
           </p>
         </div>
 
@@ -113,7 +108,7 @@ export function LoginPage() {
               type="button"
               onClick={() => {
                 setEmail('admin@buro.dev');
-                setPassword('admin');
+                setPassword('admin123');
               }}
               className="text-blue-600 hover:text-blue-500 text-sm"
             >

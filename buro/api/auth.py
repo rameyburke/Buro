@@ -265,6 +265,7 @@ async def register(
     return await auth_service.create_user_token(user)
 
 @router.get("/me", response_model=UserResponse)
+@router.get("/me/", response_model=UserResponse, include_in_schema=False)
 async def get_current_user_info(
     current_user: User = Depends(get_current_user)
 ) -> UserResponse:

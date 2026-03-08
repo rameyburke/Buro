@@ -8,6 +8,8 @@
 # - Why not in models: Models are data containers, services contain business logic
 
 from typing import List, Optional, Tuple
+import secrets
+import string
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from fastapi import HTTPException, status
@@ -47,7 +49,8 @@ class UserService:
         current_user: User,
         skip: int = 0,
         limit: int = 50,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        include_inactive: bool = False,
     ) -> Tuple[List[User], int]:
         """List users with pagination and access control.
 
@@ -67,6 +70,14 @@ class UserService:
         stmt = select(User)
         count_stmt = select(func.count()).select_from(User)
 
+        # Learning note: We default to active users only because most day-to-day
+        # workflows (assignee pickers, ownership selectors) should not surface
+        # deactivated accounts. The tradeoff is that admin tooling must explicitly
+        # opt in to include inactive users for auditing and maintenance.
+        if not include_inactive:
+            stmt = stmt.where(User.is_active.is_(True))
+            count_stmt = count_stmt.where(User.is_active.is_(True))
+
         if search:
             escaped = search.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             pattern = f"%{escaped}%"
@@ -77,7 +88,10 @@ class UserService:
             stmt = stmt.where(condition)
             count_stmt = count_stmt.where(condition)
 
-        stmt = stmt.offset(skip).limit(limit)
+        # Learning note: ordering by newest first makes admin actions easier to
+        # verify after creates/edits because recently touched users stay visible.
+        # Tradeoff: older accounts shift between pages over time.
+        stmt = stmt.order_by(User.created_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(stmt)
         users = list(result.scalars().all())
@@ -86,6 +100,60 @@ class UserService:
         total = count_result.scalar_one()
 
         return users, total
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """Lookup user by email with normalized case handling."""
+        stmt = select(User).where(func.lower(User.email) == email.lower().strip())
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def generate_temp_password(self, length: int = 12) -> str:
+        """Generate a temporary password for admin-provisioned users.
+
+        Learning note: We generate passwords server-side to keep onboarding simple
+        for this educational app (no email service required). Tradeoff: admin must
+        share the temporary secret out-of-band, which is less ideal than a secure
+        password reset flow in production.
+        """
+        alphabet = string.ascii_letters + string.digits
+        return "".join(secrets.choice(alphabet) for _ in range(length))
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        full_name: str,
+        role: Role,
+        current_user: User,
+    ) -> Tuple[User, str]:
+        """Create a user with an auto-generated temporary password.
+
+        Only administrators may provision new users from the maintenance UI.
+        """
+        if current_user.role != Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can create users",
+            )
+
+        existing_user = await self.get_user_by_email(email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User with this email already exists",
+            )
+
+        temp_password = self.generate_temp_password()
+        new_user = User(
+            email=email.lower().strip(),
+            full_name=full_name.strip(),
+            hashed_password=User.hash_password(temp_password),
+            role=role,
+            is_active=True,
+        )
+        self.db.add(new_user)
+        await self.db.commit()
+        return new_user, temp_password
 
     async def update_user_profile(
         self,
@@ -170,3 +238,17 @@ class UserService:
         target_user.is_active = False
 
         await self.db.commit()
+
+    async def reactivate_user(self, user_id: str, current_user: User) -> User:
+        """Reactivate a deactivated user (admin only)."""
+        if current_user.role != Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can reactivate users",
+            )
+
+        target_user = await self.get_user_by_id(user_id)
+        target_user.is_active = True
+        await self.db.commit()
+        await self.db.refresh(target_user)
+        return target_user
