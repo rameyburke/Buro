@@ -49,6 +49,7 @@ interface AppStore extends AppState {
   register: (email: string, password: string, fullName: string) => Promise<boolean>
   logout: () => void
   loadAuthFromStorage: () => void
+  loadCurrentUser: () => Promise<boolean>
 
   // Project actions
   loadProjects: () => Promise<boolean>
@@ -102,12 +103,14 @@ const useAppStore = create<AppStore>((set, get) => ({
     try {
       const response: AuthResponse = await api.login(email, password)
 
-      // Store token in localStorage for persistence
-      // Why localStorage: Persists across browser refreshes vs sessionStorage
+      // Save token before calling /auth/me so authenticatedFetch can attach it.
+      // Tradeoff: brief window where token is stored before user profile is loaded,
+      // but keeps the API client simple and consistent.
       localStorage.setItem('token', response.access_token)
+      const currentUser = await api.getCurrentUser()
 
       set({
-        user: response.user,
+        user: currentUser,
         token: response.access_token,
         isAuthenticated: true,
         isLoading: false
@@ -128,9 +131,10 @@ const useAppStore = create<AppStore>((set, get) => ({
       const response: AuthResponse = await api.register(email, password, fullName)
 
       localStorage.setItem('token', response.access_token)
+      const currentUser = await api.getCurrentUser()
 
       set({
-        user: response.user,
+        user: currentUser,
         token: response.access_token,
         isAuthenticated: true,
         isLoading: false
@@ -193,6 +197,20 @@ const useAppStore = create<AppStore>((set, get) => ({
         token,
         isAuthenticated: true
       })
+    }
+  },
+
+  loadCurrentUser: async (): Promise<boolean> => {
+    try {
+      const user = await api.getCurrentUser()
+      set({ user })
+      return true
+    } catch (error) {
+      console.error('Failed to load current user:', error)
+      // Learning note: if /auth/me fails with a persisted token, we reset auth
+      // state immediately to avoid "stuck logged-in" UI loops with stale tokens.
+      get().logout()
+      return false
     }
   },
 

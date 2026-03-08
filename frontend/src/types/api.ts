@@ -14,6 +14,7 @@ export interface User {
   full_name: string;
   role: 'admin' | 'manager' | 'developer';
   avatar_url?: string;
+  is_active: boolean;
 }
 
 export interface Project {
@@ -33,6 +34,22 @@ export interface UserListResponse {
   total: number;
   skip: number;
   limit: number;
+}
+
+export interface UserCreatePayload {
+  email: string;
+  full_name: string;
+  role: UserRole;
+}
+
+export interface UserUpdatePayload {
+  full_name?: string;
+  role?: UserRole;
+}
+
+export interface UserCreateResponse {
+  user: User;
+  temporary_password: string;
 }
 
 export type IssueStatus = 'backlog' | 'to_do' | 'in_progress' | 'done';

@@ -17,7 +17,10 @@ import type {
   IssueCreate,
   IssueUpdate,
   IssueListResponse,
-  UserListResponse
+  UserListResponse,
+  UserCreatePayload,
+  UserCreateResponse,
+  UserUpdatePayload,
 } from '../types/api'
 
 // API configuration
@@ -41,13 +44,13 @@ async function authenticatedFetch(
     headers.Authorization = `Bearer ${token}`
   }
 
-  // Ensure trailing slash for REST endpoints to match FastAPI router expectations
-  const hasQuery = endpoint.includes('?') || endpoint.includes('#')
-  const normalizedEndpoint = hasQuery
-    ? endpoint
-    : endpoint.endsWith('/')
-      ? endpoint
-      : `${endpoint}/`
+  // Ensure trailing slash for REST endpoints to match FastAPI router expectations.
+  // Learning note: Query-string endpoints need normalization too (e.g. `/users?x=1`
+  // should become `/users/?x=1`). The tradeoff is slightly more parsing code in
+  // exchange for fewer route-mismatch bugs across the app.
+  const [pathPart, queryPart] = endpoint.split('?')
+  const normalizedPath = pathPart.endsWith('/') ? pathPart : `${pathPart}/`
+  const normalizedEndpoint = queryPart ? `${normalizedPath}?${queryPart}` : normalizedPath
 
   const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
     ...options,
@@ -122,10 +125,44 @@ export async function getProjects(): Promise<Project[]> {
   return data.projects
 }
 
-export async function getUsers(): Promise<User[]> {
-  const response = await authenticatedFetch('/users')
+export async function getUsers(options?: { includeInactive?: boolean; search?: string; limit?: number }): Promise<User[]> {
+  const params = new URLSearchParams()
+  if (options?.includeInactive) {
+    params.set('include_inactive', 'true')
+  }
+  if (options?.search?.trim()) {
+    params.set('search', options.search.trim())
+  }
+  if (options?.limit) {
+    params.set('limit', String(options.limit))
+  }
+
+  const query = params.toString()
+  const response = await authenticatedFetch(`/users${query ? `?${query}` : ''}`)
   const data: UserListResponse = await response.json()
   return data.users
+}
+
+export async function createUser(payload: UserCreatePayload): Promise<UserCreateResponse> {
+  const response = await authenticatedFetch('/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return response.json()
+}
+
+export async function updateUser(userId: string, payload: UserUpdatePayload): Promise<User> {
+  const response = await authenticatedFetch(`/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+  return response.json()
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  await authenticatedFetch(`/users/${userId}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function createProject(

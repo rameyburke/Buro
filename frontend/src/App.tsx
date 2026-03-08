@@ -8,6 +8,7 @@ import { KanbanBoard } from './components/board/KanbanBoard';
 import { AnalyticsPage } from './pages/Analytics';
 import { ProjectsPage } from './pages/Projects';
 import { IssuesPage } from './pages/Issues';
+import { UsersPage } from './pages/Users';
 import { LoginPage } from './pages/Login';
 import { ProjectSelector } from './components/navigation/ProjectSelector';
 import { BuroLogo } from './components/branding/BuroLogo';
@@ -16,9 +17,11 @@ import { BuroLogo } from './components/branding/BuroLogo';
 function App() {
   const {
     loadAuthFromStorage,
+    loadCurrentUser,
     loadProjects,
     projects,
-    isAuthenticated
+    isAuthenticated,
+    user,
   } = useAppStore();
 
   // Initialize app state on mount
@@ -31,6 +34,12 @@ function App() {
   // Load projects only when user is authenticated
   // Why separate useEffect: Avoid loading projects until auth is confirmed
   useEffect(() => {
+    if (isAuthenticated && !user) {
+      void loadCurrentUser();
+    }
+  }, [isAuthenticated, user, loadCurrentUser]);
+
+  useEffect(() => {
     if (isAuthenticated && !projects.length) {
       loadProjects();
     }
@@ -40,8 +49,24 @@ function App() {
     { to: '/board', label: 'Kanban Board' },
     { to: '/projects', label: 'Projects' },
     { to: '/issues', label: 'Issues' },
-    { to: '/analytics', label: 'Analytics' }
+    { to: '/analytics', label: 'Analytics' },
+    ...(user?.role === 'admin' ? [{ to: '/users', label: 'Users' }] : []),
   ];
+
+  // When restoring a persisted session, wait for /auth/me before applying
+  // role-based route guards. This avoids redirecting valid admin deep-links
+  // (like /users) to /board during initial hydration.
+  if (isAuthenticated && !user) {
+    return (
+      <div className="app-root">
+        <main className="content-shell">
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            Loading your workspace...
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="app-root">
@@ -127,6 +152,7 @@ function App() {
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/issues" element={<IssuesPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/users" element={user?.role === 'admin' ? <UsersPage /> : <Navigate to="/board" replace />} />
             </>
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
