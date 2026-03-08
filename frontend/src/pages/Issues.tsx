@@ -26,7 +26,10 @@ export function IssuesPage() {
     issues,
     currentProject,
     isLoading,
-    loadIssues
+    loadIssues,
+    users,
+    usersLoading,
+    loadUsers
   } = useAppStore()
 
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -46,13 +49,22 @@ export function IssuesPage() {
     }
   }, [currentProject, loadIssues])
 
+  useEffect(() => {
+    if (users.length === 0 && !usersLoading) {
+      loadUsers()
+    }
+  }, [users.length, usersLoading, loadUsers])
+
   const filteredIssues = issues.filter(issue => {
     // Simple client-side filtering - acceptable for moderate data volumes
     // Why client-side: No need for additional API calls for simple filters
     // Alternative: Server-side for large datasets to reduce transfer/reduce client load
     if (filters.status && issue.status !== filters.status) return false
     if (filters.type && issue.issue_type !== filters.type) return false
-    if (filters.assignee && issue.assignee_id !== filters.assignee) return false
+    if (filters.assignee === 'unassigned' && issue.assignee_id) return false
+    if (filters.assignee && filters.assignee !== 'unassigned' && issue.assignee_id !== filters.assignee) {
+      return false
+    }
     return true
   })
 
@@ -140,6 +152,20 @@ export function IssuesPage() {
               <option value="story">Story</option>
               <option value="task">Task</option>
               <option value="bug">Bug</option>
+            </select>
+
+            <select
+              value={filters.assignee}
+              onChange={(e) => setFilters({ ...filters, assignee: e.target.value })}
+              className="filter-control"
+            >
+              <option value="">All Assignees</option>
+              <option value="unassigned">Unassigned</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name}
+                </option>
+              ))}
             </select>
 
             <Button
