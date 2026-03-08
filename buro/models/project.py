@@ -11,7 +11,7 @@
 #   Tradeoff: Additional database queries vs. improved UX.
 
 from sqlalchemy import Column, String, ForeignKey, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, foreign
 from typing import Optional, TYPE_CHECKING, List
 from .base import Base
 
@@ -93,6 +93,13 @@ class Project(Base):
         cascade="all, delete-orphan"
     )
 
+    default_assignee_user: Mapped[Optional["User"]] = relationship(
+        "User",
+        primaryjoin="foreign(Project.default_assignee_id) == User.id",
+        viewonly=True,
+        uselist=False,
+    )
+
     @property
     def default_assignee(self) -> Optional["User"]:
         """Get the default assignee user object.
@@ -108,9 +115,7 @@ class Project(Base):
         """
         if not self.default_assignee_id:
             return None
-        # This would need access to a session - simplified for demo
-        # In real code, we'd need to pass a session or handle differently
-        return None
+        return self.default_assignee_user
 
     def generate_issue_key(self, issue_number: int) -> str:
         """Generate a Jira-style issue key.
