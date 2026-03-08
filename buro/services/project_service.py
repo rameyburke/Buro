@@ -9,7 +9,7 @@
 
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
@@ -129,7 +129,19 @@ class ProjectService:
         if user.role == Role.ADMIN:
             stmt = select(Project).options(loader)
         else:
-            stmt = select(Project).where(Project.owner_id == user.id).options(loader)
+            stmt = (
+                select(Project)
+                .outerjoin(Issue, Issue.project_id == Project.id)
+                .where(
+                    or_(
+                        Project.owner_id == user.id,
+                        Issue.assignee_id == user.id,
+                        Issue.reporter_id == user.id,
+                    )
+                )
+                .distinct()
+                .options(loader)
+            )
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
