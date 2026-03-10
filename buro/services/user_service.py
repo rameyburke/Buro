@@ -189,12 +189,18 @@ class UserService:
             )
 
         # Apply updates with validation
-        allowed_fields = ["full_name", "avatar_url"]
+        allowed_fields = ["full_name", "avatar_url", "theme"]
         if current_user.role == Role.ADMIN:
             allowed_fields.append("role")  # Only admins can change roles
 
         for field, value in updates.items():
             if field in allowed_fields:
+                if field == "theme":
+                    # Learning note: explicit allow-list keeps preference values
+                    # constrained without introducing a heavy schema migration.
+                    # Tradeoff: small validation branch vs. predictable data.
+                    if value not in ["light", "dark"]:
+                        continue
                 setattr(target_user, field, value)
             elif field in ["password"]:  # Special handling for password changes
                 if value:

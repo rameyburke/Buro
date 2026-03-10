@@ -68,6 +68,7 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     avatar_url: Optional[str] = None
+    theme: str = "light"
 
     @classmethod
     def from_user(cls, user: User) -> "UserResponse":
@@ -81,7 +82,8 @@ class UserResponse(BaseModel):
             email=user.email,
             full_name=user.full_name,
             role=user.role.value,
-            avatar_url=user.avatar_url
+            avatar_url=user.avatar_url,
+            theme=user.theme or "light",
         )
 
 # Dependency function: Extract user from JWT token

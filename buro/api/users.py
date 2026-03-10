@@ -23,6 +23,7 @@ class UserResponse(BaseModel):
     role: str
     avatar_url: Optional[str] = None
     is_active: bool
+    theme: str = "light"
 
     @classmethod
     def from_user(cls, user: User) -> "UserResponse":
@@ -32,7 +33,8 @@ class UserResponse(BaseModel):
             full_name=user.full_name,
             role=user.role.value,
             avatar_url=user.avatar_url,
-            is_active=user.is_active
+            is_active=user.is_active,
+            theme=user.theme or "light",
         )
 
 class UserListResponse(BaseModel):
