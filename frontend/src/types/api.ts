@@ -15,6 +15,7 @@ export interface User {
   role: 'admin' | 'manager' | 'developer';
   avatar_url?: string;
   is_active: boolean;
+  theme?: 'light' | 'dark';
 }
 
 export interface Project {
@@ -45,6 +46,7 @@ export interface UserCreatePayload {
 export interface UserUpdatePayload {
   full_name?: string;
   role?: UserRole;
+  theme?: 'light' | 'dark';
 }
 
 export interface UserCreateResponse {

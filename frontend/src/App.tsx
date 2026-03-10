@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Link, NavLink } from 'react-router-dom';
 import useAppStore from './stores/appStore';
+import * as api from './lib/api';
 import './App.css';
 
 // Import pages
@@ -15,6 +16,7 @@ import { BuroLogo } from './components/branding/BuroLogo';
 
 // Main App Component
 function App() {
+  const [themeSaving, setThemeSaving] = useState(false);
   const {
     loadAuthFromStorage,
     loadCurrentUser,
@@ -23,6 +25,8 @@ function App() {
     isAuthenticated,
     user,
   } = useAppStore();
+
+  const currentTheme = user?.theme === 'dark' ? 'dark' : 'light';
 
   // Initialize app state on mount
   // Why useEffect: Run once when app starts, after component mounts
@@ -44,6 +48,30 @@ function App() {
       loadProjects();
     }
   }, [isAuthenticated, loadProjects, projects.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (currentTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [currentTheme]);
+
+  const toggleTheme = async () => {
+    if (!user || themeSaving) return;
+
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setThemeSaving(true);
+
+    try {
+      await api.updateUser(user.id, { theme: nextTheme });
+      await loadCurrentUser();
+    } catch (error) {
+      console.error('Failed to update theme preference:', error);
+    } finally {
+      setThemeSaving(false);
+    }
+  };
 
   const navLinks = [
     { to: '/board', label: 'Kanban Board' },
@@ -69,7 +97,7 @@ function App() {
   }
 
   return (
-    <div className="app-root">
+    <div className={`app-root ${currentTheme === 'dark' ? 'dark' : ''}`}>
       {/* Navigation Header */}
       <header className="buro-header">
         <div className="header-inner">
@@ -96,12 +124,24 @@ function App() {
           <div className="header-actions">
             {isAuthenticated && <ProjectSelector />}
             {isAuthenticated ? (
-              <button
-                onClick={() => useAppStore.getState().logout()}
-                className="ghost-button"
-              >
-                Logout
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  disabled={themeSaving}
+                  className="theme-toggle-button rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-700"
+                  data-testid="theme-toggle"
+                  aria-label={`Switch to ${currentTheme === 'dark' ? 'light' : 'dark'} theme`}
+                >
+                  {currentTheme === 'dark' ? 'Light' : 'Dark'}
+                </button>
+                <button
+                  onClick={() => useAppStore.getState().logout()}
+                  className="ghost-button"
+                >
+                  Logout
+                </button>
+              </>
             ) : (
               <button
                 onClick={() => alert('Login/Register coming in next sprint!')}
