@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from sqlalchemy import inspect, text
 import uvicorn
 
 # Why separate routers: Domain-driven organization
@@ -142,6 +143,29 @@ app.include_router(
     prefix="/api/analytics",
     tags=["analytics"]
 )
+
+
+@app.on_event("startup")
+async def ensure_user_theme_preference_column() -> None:
+    """Backfill schema for theme preferences without separate migration script.
+
+    Learning note: This keeps local/dev environments compatible when schema
+    evolves quickly. Tradeoff: startup performs a tiny schema check query.
+    """
+
+    def _sync_ensure_column(sync_conn) -> None:
+        inspector = inspect(sync_conn)
+        if "users" not in inspector.get_table_names():
+            return
+        column_names = {column["name"] for column in inspector.get_columns("users")}
+        if "theme" not in column_names:
+            sync_conn.execute(
+                text("ALTER TABLE users ADD COLUMN theme VARCHAR(20) DEFAULT 'light'")
+            )
+        sync_conn.execute(text("UPDATE users SET theme='light' WHERE theme IS NULL"))
+
+    async with engine.begin() as conn:
+        await conn.run_sync(_sync_ensure_column)
 
 # Root endpoint for health checks and API discovery
 @app.get("/", tags=["health"])

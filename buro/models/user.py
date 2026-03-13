@@ -98,6 +98,13 @@ class User(Base):
         comment="Account status (false = deactivated)"
     )
 
+    theme: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        default="light",
+        comment="UI theme preference: 'light' or 'dark'"
+    )
+
     # Relationships with cascading delete behavior
     # Why cascade="all, delete-orphan":
     # - Maintains referential integrity
