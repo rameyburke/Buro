@@ -32,6 +32,24 @@ async def test_authenticate_user_invalid_password(auth_service, user_factory):
     assert exc.value.status_code == 401
 
 
+async def test_authenticate_user_supports_legacy_plaintext_seed(auth_service, db_session):
+    from buro.models import User
+
+    user = User(
+        email="legacy@example.com",
+        full_name="Legacy Seed User",
+        hashed_password="admin123",
+        role=Role.ADMIN,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    authenticated = await auth_service.authenticate_user("legacy@example.com", "admin123")
+
+    assert authenticated.email == "legacy@example.com"
+
+
 async def test_register_user_prevents_duplicates(auth_service):
     await auth_service.register_user(
         email="dup@example.com",

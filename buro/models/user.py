@@ -9,12 +9,15 @@
 #   Tradeoff: Username changes not supported vs. familiar pattern.
 # - Role-based access: Simple enum vs. complex permissions systems.
 
-from sqlalchemy import Column, String, Boolean, Enum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from passlib.context import CryptContext
 import enum
+import hmac
 import logging
 from typing import Optional, TYPE_CHECKING
+
+from passlib.context import CryptContext
+from sqlalchemy import Column, String, Boolean, Enum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from .base import Base
 
 if TYPE_CHECKING:
@@ -154,6 +157,14 @@ class User(Base):
         if not self.hashed_password:
             logger.warning(f"verify_password: no hashed_password for user {self.email}")
             return False
+
+        identified_scheme = pwd_context.identify(self.hashed_password)
+        if not identified_scheme:
+            logger.warning(
+                "verify_password: using legacy plaintext comparison for user %s",
+                self.email,
+            )
+            return hmac.compare_digest(self.hashed_password, plain_password)
 
         # Production: Proper hash verification
         try:

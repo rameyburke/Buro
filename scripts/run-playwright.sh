@@ -6,7 +6,7 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 
 echo "==> Building frontend"
 cd "$FRONTEND_DIR"
-npm run build >/dev/null
+npm run build:fast >/dev/null
 
 echo "==> Seeding database"
 cd "$ROOT_DIR"

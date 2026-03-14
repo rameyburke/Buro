@@ -11,6 +11,7 @@
 #   In production: Restrict origins for security.
 
 import os
+import re
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -24,9 +25,9 @@ import uvicorn
 
 # Why separate routers: Domain-driven organization
 # Benefits: Independent testing, cleaner code, scalable when app grows
-from api import auth, issues, projects, users, analytics
-from core.database import engine
-from models import Base
+from buro.api import analytics, auth, issues, projects, users
+from buro.core.database import engine
+from buro.models import Base
 
 # Why lifespan context manager: Modern FastAPI approach for startup/shutdown
 # Replaces on_event("startup"/"shutdown") - cleaner async handling
@@ -193,6 +194,27 @@ async def root():
 # Only in development mode (when FRONTEND_BUILD_PATH is set)
 frontend_build_path = os.getenv("FRONTEND_BUILD_PATH")
 if frontend_build_path and Path(frontend_build_path).exists():
+    build_root = Path(frontend_build_path)
+
+    _HASHED_ASSET_PATTERN = re.compile(
+        r"^(?P<prefix>.+)\.(?P<hash>[0-9a-f]{8,})\.(?P<ext>css|js)$"
+    )
+
+    def _resolve_hashed_asset_fallback(asset_path: Path) -> Path | None:
+        """Map stale hashed bundle requests to the latest matching build asset."""
+        match = _HASHED_ASSET_PATTERN.match(asset_path.name)
+        if not match:
+            return None
+
+        prefix = match.group("prefix")
+        extension = match.group("ext")
+        candidates = sorted(
+            asset_path.parent.glob(f"{prefix}.*.{extension}"),
+            key=lambda candidate: candidate.stat().st_mtime,
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
+
     @app.get("/{path:path}")
     async def serve_frontend(path: str = ""):
         """Serve frontend for any non-API route."""
@@ -200,9 +222,13 @@ if frontend_build_path and Path(frontend_build_path).exists():
         
         # Serve static files directly
         if path.startswith("static/") or path.startswith("favicon"):
-            file_path = Path(frontend_build_path) / path
+            file_path = build_root / path
             if file_path.exists():
                 return FileResponse(file_path)
+
+            fallback_file = _resolve_hashed_asset_fallback(file_path)
+            if fallback_file:
+                return FileResponse(fallback_file)
             return JSONResponse({"error": "Static file not found"}, status_code=404)
         
         # Don't interfere with API routes
@@ -210,9 +236,9 @@ if frontend_build_path and Path(frontend_build_path).exists():
             return JSONResponse({"error": "API route not found"}, status_code=404)
         
         # Serve index.html for SPA routing
-        index_path = Path(frontend_build_path) / "index.html"
+        index_path = build_root / "index.html"
         if index_path.exists():
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers={"Cache-Control": "no-cache"})
         return JSONResponse({"error": "Frontend not found"}, status_code=404)
 
 
