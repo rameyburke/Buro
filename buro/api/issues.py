@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from pydantic import BaseModel
-from uuid import UUID
 
 from buro.core.database import get_db
 from buro.models import (
@@ -135,12 +135,23 @@ class IssueListResponse(BaseModel):
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+def _is_locked_db_error(exc: OperationalError) -> bool:
+    return "database is locked" in str(exc).lower()
+
+
+async def _safe_rollback(db: AsyncSession) -> None:
+    try:
+        await db.rollback()
+    except Exception:
+        logger.exception("Failed to rollback database session")
+
 @router.get("/projects/{project_id}/issues/", response_model=IssueListResponse)
 async def list_issues(
     project_id: str,
     assignee_id: Optional[str] = Query(None, description="Filter by assignee"),
     reporter_id: Optional[str] = Query(None, description="Filter by reporter"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
     issue_type: Optional[str] = Query(None, description="Filter by issue type"),
     skip: int = Query(0, ge=0, description="Number of issues to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of issues to return"),
@@ -166,7 +177,22 @@ async def list_issues(
             skip=skip,
             limit=limit
         )
+    except HTTPException:
+        raise
+    except OperationalError as exc:
+        await _safe_rollback(db)
+        if _is_locked_db_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Issue data is temporarily unavailable. Please retry."
+            )
+        logger.exception("Database error while listing issues for project %s", project_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list issues"
+        )
     except Exception:
+        await _safe_rollback(db)
         logger.exception("Failed to list issues for project %s", project_id)
         raise HTTPException(
             status_code=500,
@@ -244,7 +270,33 @@ async def create_issue(
     except HTTPException:
         # Re-raise service layer exceptions
         raise
-    except Exception as e:
+    except IntegrityError:
+        await _safe_rollback(db)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid issue payload"
+        )
+    except OperationalError as exc:
+        await _safe_rollback(db)
+        if _is_locked_db_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Issue could not be created right now. Please retry."
+            )
+        logger.exception("Database error while creating issue")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create issue"
+        )
+    except SQLAlchemyError:
+        await _safe_rollback(db)
+        logger.exception("SQLAlchemy error while creating issue")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create issue"
+        )
+    except Exception:
+        await _safe_rollback(db)
         logger.exception("Failed to create issue")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -286,7 +338,27 @@ async def update_issue(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except OperationalError as exc:
+        await _safe_rollback(db)
+        if _is_locked_db_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Issue update is temporarily unavailable. Please retry."
+            )
+        logger.exception("Database error while updating issue %s", issue_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue"
+        )
+    except SQLAlchemyError:
+        await _safe_rollback(db)
+        logger.exception("SQLAlchemy error while updating issue %s", issue_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue"
+        )
+    except Exception:
+        await _safe_rollback(db)
         logger.exception("Failed to update issue %s", issue_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -311,7 +383,6 @@ async def update_issue_status(
     - Are there business rules (approvals, transitions)?
     - Should this trigger notifications?
     """
-    print(f"DEBUG: Status update request - issue: {issue_id}, new_status: {new_status.value}")
     issue_service = IssueService(db)
 
     try:
@@ -325,8 +396,28 @@ async def update_issue_status(
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"DEBUG Status Update Error: {e}")
+    except OperationalError as exc:
+        await _safe_rollback(db)
+        if _is_locked_db_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Issue status update is temporarily unavailable. Please retry."
+            )
+        logger.exception("Database error while updating issue status %s", issue_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue status"
+        )
+    except SQLAlchemyError:
+        await _safe_rollback(db)
+        logger.exception("SQLAlchemy error while updating issue status %s", issue_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue status"
+        )
+    except Exception:
+        await _safe_rollback(db)
+        logger.exception("Failed to update issue status %s", issue_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update issue status"
@@ -364,13 +455,26 @@ async def get_kanban_board(
                 kanban_board[status_key].append(IssueResponse.from_issue(issue))
 
         return kanban_board
-    except Exception as e:
-        logger.error(f"Error in get_kanban_board for project {project_id}: {e}")
-        import traceback
-        traceback.print_exc()
+    except HTTPException:
+        raise
+    except OperationalError as exc:
+        await _safe_rollback(db)
+        if _is_locked_db_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Kanban board is temporarily unavailable. Please retry."
+            )
+        logger.exception("Database error in get_kanban_board for project %s", project_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to load kanban board: {e}"
+            detail="Failed to load kanban board"
+        )
+    except Exception:
+        await _safe_rollback(db)
+        logger.exception("Error in get_kanban_board for project %s", project_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to load kanban board"
         )
 
 
@@ -382,8 +486,30 @@ async def delete_issue(
 ):
     """Delete an issue (hard delete for now)."""
     issue_service = IssueService(db)
-    await issue_service.delete_issue(issue_id, current_user)
-    return None
+    try:
+        await issue_service.delete_issue(issue_id, current_user)
+        return None
+    except HTTPException:
+        raise
+    except OperationalError as exc:
+        await _safe_rollback(db)
+        if _is_locked_db_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Issue deletion is temporarily unavailable. Please retry."
+            )
+        logger.exception("Database error while deleting issue %s", issue_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete issue"
+        )
+    except Exception:
+        await _safe_rollback(db)
+        logger.exception("Failed to delete issue %s", issue_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete issue"
+        )
 
 # TODO: Add endpoints for:
 # - DELETE /{issue_id} (soft delete)

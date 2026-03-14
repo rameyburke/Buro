@@ -10,6 +10,8 @@
 from typing import List, Optional, Dict
 import asyncio
 import datetime
+import logging
+import sqlite3
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import joinedload
@@ -23,6 +25,10 @@ from buro.models import (
 
 
 _PROJECT_ISSUE_LOCKS: Dict[str, asyncio.Lock] = {}
+_DB_LOCK_RETRY_ATTEMPTS = 5
+_DB_LOCK_RETRY_BACKOFF_SECONDS = 0.2
+
+logger = logging.getLogger(__name__)
 
 
 class IssueService:
@@ -34,6 +40,12 @@ class IssueService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _is_db_locked_error(exc: OperationalError) -> bool:
+        message = str(exc).lower()
+        orig = exc.orig
+        return "database is locked" in message or isinstance(orig, sqlite3.OperationalError)
 
     async def create_issue(
         self,
@@ -80,7 +92,16 @@ class IssueService:
                     detail="Invalid assignee"
                 )
 
-        for attempt in range(3):
+        title = title.strip()
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Title cannot be empty"
+            )
+
+        normalized_description = description.strip() if description and description.strip() else None
+
+        for attempt in range(_DB_LOCK_RETRY_ATTEMPTS):
             try:
                 async with self._get_project_issue_lock(project_id):
                     # Generate next issue number for this project
@@ -95,8 +116,8 @@ class IssueService:
                     # Create issue with default values
                     issue = Issue(
                         issue_number=next_number,
-                        title=title.strip(),
-                        description=description.strip() if description else None,
+                        title=title,
+                        description=normalized_description,
                         issue_type=issue_type,
                         priority=priority,
                         status=IssueStatus.BACKLOG,  # Default starting status
@@ -120,9 +141,10 @@ class IssueService:
                 return refreshed_issue
             except OperationalError as exc:
                 await self.db.rollback()
-                if "database is locked" in str(exc).lower() and attempt < 2:
-                    await asyncio.sleep(0.2 * (attempt + 1))
+                if self._is_db_locked_error(exc) and attempt < _DB_LOCK_RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_DB_LOCK_RETRY_BACKOFF_SECONDS * (attempt + 1))
                     continue
+                logger.exception("Issue creation failed due to database error")
                 raise
             except Exception:
                 await self.db.rollback()
@@ -176,7 +198,7 @@ class IssueService:
         reporter_id: Optional[str] = None,
         status: Optional[IssueStatus] = None,
         issue_type: Optional[IssueType] = None,
-        current_user: User = None,
+        current_user: Optional[User] = None,
         skip: int = 0,
         limit: int = 50
     ) -> List[Issue]:
@@ -256,79 +278,107 @@ class IssueService:
         Educational Note: Field-level permissions vs model-level permissions.
         Some users can edit certain fields but not others.
         """
-        issue = await self.db.get(Issue, issue_id)
-        if not issue:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Issue not found"
-            )
+        current_user_id = current_user.id
+        current_user_role = current_user.role
 
-        # Check if user can edit issues in this project
-        if not await self._user_can_access_issue(current_user, issue):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot modify this issue"
-            )
-
-        # Apply updates with field-specific validation
-        assignee_notification: Optional[User] = None
-
-        for field, value in updates.items():
-            if field in ['title', 'description']:
-                # Basic fields - most users can edit
-                if not value or not value.strip():
+        for attempt in range(_DB_LOCK_RETRY_ATTEMPTS):
+            try:
+                issue = await self.db.get(Issue, issue_id)
+                if not issue:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"{field} cannot be empty"
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Issue not found"
                     )
-                setattr(issue, field, value.strip())
-            elif field == 'assignee_id':
-                # Assignment changes - can assign to valid users
-                assignee = None
-                if value is not None:
-                    assignee = await self.db.get(User, value)
-                    if not assignee or not assignee.is_active:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Invalid assignee"
-                        )
-                # Store old assignee for notification
-                old_assignee = issue.assignee
-                setattr(issue, field, value)
 
-                if assignee:
-                    assignee_notification = assignee
-            elif field == 'priority':
-                # Priority changes - validate enum value
-                if value not in [p.value for p in Priority]:
+                # Check if user can edit issues in this project
+                if not await self._user_can_access_issue(
+                    user_id=current_user_id,
+                    user_role=current_user_role,
+                    issue=issue,
+                ):
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid priority value"
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Cannot modify this issue"
                     )
-                issue.priority = Priority(value)
-            elif field == 'status':
-                # Status changes - use workflow method for validation
-                await self.transition_issue_status(issue_id, IssueStatus(value), current_user)
 
-        await self.db.commit()
+                # Apply updates with field-specific validation
+                assignee_notification: Optional[User] = None
 
-        # Re-load with relationships for response serialization
-        stmt = select(Issue).options(
-            joinedload(Issue.project),
-            joinedload(Issue.assignee),
-            joinedload(Issue.reporter)
-        ).where(Issue.id == issue.id)
-        result = await self.db.execute(stmt)
-        refreshed_issue = result.unique().scalar_one()
+                for field, value in updates.items():
+                    if field in ['title', 'description']:
+                        # Basic fields - most users can edit
+                        if not value or not value.strip():
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"{field} cannot be empty"
+                            )
+                        setattr(issue, field, value.strip())
+                    elif field == 'assignee_id':
+                        # Assignment changes - can assign to valid users
+                        assignee = None
+                        if value is not None:
+                            assignee = await self.db.get(User, value)
+                            if not assignee or not assignee.is_active:
+                                raise HTTPException(
+                                    status_code=status.HTTP_400_BAD_REQUEST,
+                                    detail="Invalid assignee"
+                                )
+                        setattr(issue, field, value)
 
-        if background_tasks and assignee_notification is not None:
-            await self._notify_assignee_change(
-                assignee_notification,
-                refreshed_issue,
-                background_tasks
-            )
+                        if assignee:
+                            assignee_notification = assignee
+                    elif field == 'priority':
+                        # Priority changes - validate enum value
+                        if isinstance(value, Priority):
+                            issue.priority = value
+                        elif value in [p.value for p in Priority]:
+                            issue.priority = Priority(value)
+                        else:
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Invalid priority value"
+                            )
+                    elif field == 'status':
+                        # Status changes - use workflow method for validation
+                        await self.transition_issue_status(issue_id, IssueStatus(value), current_user)
 
-        return refreshed_issue
+                await self.db.commit()
+
+                # Re-load with relationships for response serialization
+                stmt = select(Issue).options(
+                    joinedload(Issue.project),
+                    joinedload(Issue.assignee),
+                    joinedload(Issue.reporter)
+                ).where(Issue.id == issue.id)
+                result = await self.db.execute(stmt)
+                refreshed_issue = result.unique().scalar_one()
+
+                if background_tasks and assignee_notification is not None:
+                    await self._notify_assignee_change(
+                        assignee_notification,
+                        refreshed_issue,
+                        background_tasks
+                    )
+
+                return refreshed_issue
+            except HTTPException:
+                await self.db.rollback()
+                raise
+            except OperationalError as exc:
+                await self.db.rollback()
+                if self._is_db_locked_error(exc) and attempt < _DB_LOCK_RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_DB_LOCK_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                    continue
+                logger.exception("Issue update failed due to database error")
+                raise
+            except Exception:
+                await self.db.rollback()
+                raise
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue"
+        )
 
     async def transition_issue_status(
         self,
@@ -344,67 +394,122 @@ class IssueService:
         Educational Note: Workflow validation prevents invalid states.
         Unlike Scrum which restricts transitions, Kanban allows flexibility.
         """
-        # Eager load relationships for serialization
-        stmt = select(Issue).options(
-            joinedload(Issue.project),
-            joinedload(Issue.assignee),
-            joinedload(Issue.reporter)
-        ).where(Issue.id == issue_id)
-        result = await self.db.execute(stmt)
-        issue = result.unique().scalar_one_or_none()
-        if not issue:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Issue not found"
-            )
+        current_user_id = current_user.id
+        current_user_role = current_user.role
 
-        # Check permissions - anyone who can edit the issue can change status
-        if not await self._user_can_access_issue(current_user, issue):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot change issue status"
-            )
+        for attempt in range(_DB_LOCK_RETRY_ATTEMPTS):
+            try:
+                # Eager load relationships for serialization
+                stmt = select(Issue).options(
+                    joinedload(Issue.project),
+                    joinedload(Issue.assignee),
+                    joinedload(Issue.reporter)
+                ).where(Issue.id == issue_id)
+                result = await self.db.execute(stmt)
+                issue = result.unique().scalar_one_or_none()
+                if not issue:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Issue not found"
+                    )
 
-        # Kanban workflow: All transitions allowed - Kanban focuses on flow, not rigid process
-        # Educational Note: Unlike Scrum which enforces sprint ceremonies and workflows,
-        # Kanban allows flexible status transitions to optimize work visualization and flow
+                # Check permissions - anyone who can edit the issue can change status
+                if not await self._user_can_access_issue(
+                    user_id=current_user_id,
+                    user_role=current_user_role,
+                    issue=issue,
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Cannot change issue status"
+                    )
 
-        if new_status == IssueStatus.IN_PROGRESS and issue.started_at is None:
-            issue.started_at = datetime.datetime.utcnow()
+                # Kanban workflow: All transitions allowed - Kanban focuses on flow, not rigid process
+                # Educational Note: Unlike Scrum which enforces sprint ceremonies and workflows,
+                # Kanban allows flexible status transitions to optimize work visualization and flow
 
-        if new_status == IssueStatus.DONE and issue.completed_at is None:
-            issue.completed_at = datetime.datetime.utcnow()
+                if new_status == IssueStatus.IN_PROGRESS and issue.started_at is None:
+                    issue.started_at = datetime.datetime.utcnow()
 
-        issue.status = new_status
-        await self.db.commit()
+                if new_status == IssueStatus.DONE and issue.completed_at is None:
+                    issue.completed_at = datetime.datetime.utcnow()
 
-        # Re-query the issue to get the updated data WITH relationships
-        stmt = select(Issue).options(
-            joinedload(Issue.project),
-            joinedload(Issue.assignee),
-            joinedload(Issue.reporter)
-        ).where(Issue.id == issue.id)
-        result = await self.db.execute(stmt)
-        updated_issue = result.unique().scalar_one()
-        return updated_issue
+                issue.status = new_status
+                await self.db.commit()
+
+                # Re-query the issue to get the updated data WITH relationships
+                stmt = select(Issue).options(
+                    joinedload(Issue.project),
+                    joinedload(Issue.assignee),
+                    joinedload(Issue.reporter)
+                ).where(Issue.id == issue.id)
+                result = await self.db.execute(stmt)
+                updated_issue = result.unique().scalar_one()
+                return updated_issue
+            except HTTPException:
+                await self.db.rollback()
+                raise
+            except OperationalError as exc:
+                await self.db.rollback()
+                if self._is_db_locked_error(exc) and attempt < _DB_LOCK_RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_DB_LOCK_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                    continue
+                logger.exception("Issue status transition failed due to database error")
+                raise
+            except Exception:
+                await self.db.rollback()
+                raise
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue status"
+        )
 
     async def delete_issue(self, issue_id: str, current_user: User) -> None:
         """Soft delete (currently hard delete) an issue when permitted."""
-        issue = await self.db.get(Issue, issue_id)
-        if not issue:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Issue not found"
-            )
+        current_user_id = current_user.id
+        current_user_role = current_user.role
 
-        if not await self._user_can_access_issue(current_user, issue):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot delete this issue"
-            )
+        for attempt in range(_DB_LOCK_RETRY_ATTEMPTS):
+            try:
+                issue = await self.db.get(Issue, issue_id)
+                if not issue:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Issue not found"
+                    )
 
-        await self.db.delete(issue)
-        await self.db.commit()
+                if not await self._user_can_access_issue(
+                    user_id=current_user_id,
+                    user_role=current_user_role,
+                    issue=issue,
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Cannot delete this issue"
+                    )
+
+                await self.db.delete(issue)
+                await self.db.commit()
+                return
+            except HTTPException:
+                await self.db.rollback()
+                raise
+            except OperationalError as exc:
+                await self.db.rollback()
+                if self._is_db_locked_error(exc) and attempt < _DB_LOCK_RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_DB_LOCK_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                    continue
+                logger.exception("Issue deletion failed due to database error")
+                raise
+            except Exception:
+                await self.db.rollback()
+                raise
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete issue"
+        )
 
     async def _get_accessible_project_ids(self, user: User) -> List[str]:
         """Helper method to get project IDs user can access."""
@@ -437,17 +542,19 @@ class IssueService:
             return False
         return self._user_can_access_project(user, project)
 
-    async def _user_can_access_issue(self, user: User, issue: Issue) -> bool:
+    async def _user_can_access_issue(
+        self, user_id: str, user_role: Role, issue: Issue
+    ) -> bool:
         """Check if user can access and modify a specific issue."""
-        if user.role == Role.ADMIN:
+        if user_role == Role.ADMIN:
             return True
 
-        if user.id == issue.assignee_id or user.id == issue.reporter_id:
+        if user_id == issue.assignee_id or user_id == issue.reporter_id:
             return True
 
-        if user.role == Role.MANAGER:
+        if user_role == Role.MANAGER:
             project = await self.db.get(Project, issue.project_id)
-            return project is not None and project.owner_id == user.id
+            return project is not None and project.owner_id == user_id
 
         return False
 

@@ -1,7 +1,10 @@
 """Unit tests for IssueService business logic."""
 
+import sqlite3
+
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 
 from buro.models import IssueStatus, IssueType, Priority, Role, Issue
 
@@ -167,3 +170,36 @@ async def test_delete_issue_removes_record(issue_service, issue_factory, db_sess
     await issue_service.delete_issue(issue.id, current_user=issue.reporter)
 
     assert await db_session.get(Issue, issue.id) is None
+
+
+async def test_update_issue_retries_when_database_is_locked(
+    issue_service,
+    issue_factory,
+    user_factory,
+    monkeypatch,
+):
+    reporter = await user_factory(role=Role.MANAGER)
+    issue = await issue_factory(reporter=reporter)
+    original_commit = issue_service.db.commit
+    calls = {"count": 0}
+
+    async def flaky_commit():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise OperationalError(
+                "UPDATE issues SET title = :title",
+                {},
+                sqlite3.OperationalError("database is locked"),
+            )
+        await original_commit()
+
+    monkeypatch.setattr(issue_service.db, "commit", flaky_commit)
+
+    updated = await issue_service.update_issue(
+        issue.id,
+        {"title": "Retried title"},
+        current_user=reporter,
+    )
+
+    assert updated.title == "Retried title"
+    assert calls["count"] >= 2
