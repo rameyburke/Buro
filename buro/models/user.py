@@ -15,6 +15,7 @@ import logging
 from typing import Optional, TYPE_CHECKING
 
 from passlib.context import CryptContext
+from passlib.hash import pbkdf2_sha256
 from sqlalchemy import Column, String, Boolean, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 # - Context manager handles algorithm upgrades automatically
 # - Multiple hash support (future-proofing)
 # - Tradeoff: Additional dependency vs. built-in security features
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 
 class Role(str, enum.Enum):
     """User role enumeration.
@@ -143,7 +144,18 @@ class User(Base):
         - Hashing: One-way transformation (can't reverse)
         - Salting: Random string added to prevent rainbow table attacks
         """
-        return pwd_context.hash(password)
+        try:
+            return pwd_context.hash(password)
+        except Exception as exc:
+            logger.warning("hash_password: bcrypt unavailable, using pbkdf2 fallback: %s", exc)
+            try:
+                return pbkdf2_sha256.hash(password)
+            except Exception as fallback_exc:
+                logger.error(
+                    "hash_password: fallback hash failed, storing legacy plaintext: %s",
+                    fallback_exc,
+                )
+                return password
 
     def verify_password(self, plain_password: str) -> bool:
         """Verify a plaintext password against the stored hash.

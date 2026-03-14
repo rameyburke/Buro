@@ -50,6 +50,30 @@ async def test_authenticate_user_supports_legacy_plaintext_seed(auth_service, db
     assert authenticated.email == "legacy@example.com"
 
 
+async def test_hash_password_falls_back_when_bcrypt_unavailable(monkeypatch):
+    from buro.models import Role, User
+    from buro.models import user as user_model
+
+    original_hash = user_model.pwd_context.hash
+
+    def flaky_hash(password: str, **kwargs):
+        raise RuntimeError("bcrypt backend unavailable")
+
+    monkeypatch.setattr(user_model.pwd_context, "hash", flaky_hash)
+
+    hashed_password = User.hash_password("admin123")
+    fallback_user = User(
+        email="fallback@example.com",
+        full_name="Fallback User",
+        hashed_password=hashed_password,
+        role=Role.ADMIN,
+        is_active=True,
+    )
+
+    assert hashed_password != "admin123"
+    assert fallback_user.verify_password("admin123") is True
+
+
 async def test_register_user_prevents_duplicates(auth_service):
     await auth_service.register_user(
         email="dup@example.com",
