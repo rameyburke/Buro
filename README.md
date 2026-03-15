@@ -80,12 +80,12 @@ Notes:
    npm install
    ```
 
-3. **Start the React development server**
+3. **Start the Vite development server**
    ```bash
    npm start
    ```
 
-   The React app will be available at http://localhost:3000
+   The frontend app will be available at http://localhost:3000
 
 ## 🎯 Usage
 
@@ -212,7 +212,7 @@ poetry run gunicorn buro.main:app -w 4 -k uvicorn.workers.UvicornWorker
 ```bash
 cd frontend
 npm run build
-# Serve built files from dist/ directory
+# Build output is written to frontend/build
 ```
 
 ## 🤝 Contributing
