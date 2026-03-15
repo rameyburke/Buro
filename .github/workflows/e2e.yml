@@ -87,7 +87,7 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         env:
-          REACT_APP_API_URL: /api
+          VITE_API_URL: /api
         run: npm run build
 
       - name: Start backend with frontend
