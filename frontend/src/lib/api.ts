@@ -27,7 +27,7 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   process.env.REACT_APP_API_URL ||
-  'http://localhost:8000/api'
+  '/api'
 
 // Utility function for authenticated fetch requests
 // Why this function: DRYs up JWT header inclusion logic and handles FastAPI redirects

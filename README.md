@@ -24,6 +24,14 @@ A Jira-like agile project management application built with FastAPI backend and 
 
 ## Backend Setup
 
+Single-command local start:
+
+```bash
+make dev
+```
+
+This builds the frontend, ensures the local SQLite tables exist, and starts one server on `http://127.0.0.1:8000` serving both the SPA and `/api`.
+
 1. **Navigate to the project directory**
    ```bash
    cd /mnt/c/Users/ramey/source/repos/Buro
@@ -59,14 +67,12 @@ A Jira-like agile project management application built with FastAPI backend and 
 Use this single command to serve the built frontend and API together:
 
 ```bash
-FRONTEND_BUILD_PATH="/mnt/c/Users/ramey/source/repos/Buro/frontend/build" \
-SECRET_KEY="your-secret-key-here" \
-poetry run uvicorn buro.main:app --host 0.0.0.0 --port 8000
+make dev
 ```
 
 Notes:
-- `FRONTEND_BUILD_PATH` must point to the React build output.
-- `SECRET_KEY` is required for JWT auth. If omitted, the app falls back to the default placeholder key (not recommended for anything beyond local dev).
+- Override host/port if needed: `make dev HOST=0.0.0.0 PORT=3000`
+- Override frontend path if needed: `make dev FRONTEND_BUILD_PATH=/custom/path/to/frontend/build`
 
 ## Frontend Setup
 

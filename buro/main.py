@@ -14,6 +14,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 from contextlib import asynccontextmanager
@@ -168,27 +169,22 @@ async def ensure_user_theme_preference_column() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(_sync_ensure_column)
 
-# Root endpoint for health checks and API discovery
-@app.get("/", tags=["health"])
-async def root():
-    """Health check endpoint for monitoring and discovery.
-
-    Why GET / endpoint: Standard practice for service health checks.
-    Returns basic API information for developers.
-
-    Educational Note: Health checks are essential for:
-    - Load balancer health monitoring
-    - Container orchestration systems (Kubernetes, Docker Compose)
-    - Monitoring dashboards
-    """
+def _api_metadata() -> dict:
     return {
         "name": "Buro API",
         "version": "0.1.0",
         "description": "Agile project management API",
-        "docs": "/docs",         # Interactive Swagger UI
-        "redoc": "/redoc",       # ReDoc documentation
-        "openapi": "/openapi.json"  # OpenAPI spec
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "openapi": "/openapi.json",
     }
+
+
+@app.get("/api/health", tags=["health"])
+async def health_check():
+    """Health check endpoint for monitoring and API discovery."""
+
+    return _api_metadata()
 
 # Serve frontend static files from same origin to avoid CORS
 # Only in development mode (when FRONTEND_BUILD_PATH is set)
@@ -200,7 +196,7 @@ if frontend_build_path and Path(frontend_build_path).exists():
         r"^(?P<prefix>.+)\.(?P<hash>[0-9a-f]{8,})\.(?P<ext>css|js)$"
     )
 
-    def _resolve_hashed_asset_fallback(asset_path: Path) -> Path | None:
+    def _resolve_hashed_asset_fallback(asset_path: Path) -> Optional[Path]:
         """Map stale hashed bundle requests to the latest matching build asset."""
         match = _HASHED_ASSET_PATTERN.match(asset_path.name)
         if not match:
@@ -214,6 +210,13 @@ if frontend_build_path and Path(frontend_build_path).exists():
             reverse=True,
         )
         return candidates[0] if candidates else None
+
+    @app.get("/", include_in_schema=False)
+    async def serve_frontend_root():
+        index_path = build_root / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path, headers={"Cache-Control": "no-cache"})
+        return _api_metadata()
 
     @app.get("/{path:path}")
     async def serve_frontend(path: str = ""):
